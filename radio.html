@@ -54,6 +54,18 @@ button{cursor:pointer;-webkit-tap-highlight-color:transparent}
 .mread{color:var(--dim);font-variant-numeric:tabular-nums;min-width:108px;text-align:right}
 #dial{display:block;width:calc(100% - 44px);height:210px;margin:0 22px;background:var(--dark);border-top:1px solid #262626;
   border-radius:0 0 3px 3px;touch-action:none;cursor:ew-resize}
+.cwon #dial{border-radius:0}
+.cw{display:none;background:var(--dark);color:var(--lit);margin:0 22px;border-top:1px solid #262626;border-radius:0 0 3px 3px;padding:12px 22px 14px}
+.cwon .cw{display:block}
+.cwh{display:flex;align-items:center;gap:12px;color:var(--dim);font-variant-numeric:tabular-nums}
+.cwh .lab{color:var(--dim)}
+.cwh i{width:9px;height:9px;border-radius:50%;background:#333;flex:none}
+.cwh i.on{background:var(--lit)}
+.cwh button{margin-left:auto;background:none;border:1px solid #444;color:var(--dim);padding:4px 10px;font-size:11px;letter-spacing:.04em}
+.cwh button:hover{color:var(--lit);border-color:#777}
+.cwt{font-size:17px;letter-spacing:.12em;line-height:1.6;min-height:3.2em;max-height:6.4em;overflow-y:auto;white-space:pre-wrap;
+  overflow-wrap:anywhere;margin-top:8px;user-select:text;-webkit-user-select:text}
+.cwt:empty::before{content:"Put the needle on a Morse signal. The text appears here.";color:#5d5b57;letter-spacing:.02em;font-size:13px}
 
 /* controls */
 .ctl{display:grid;grid-template-columns:auto 1fr;gap:22px 30px;padding:24px 22px 8px;align-items:start}
@@ -119,6 +131,7 @@ kbd{font:inherit;border:1px solid var(--faint);border-radius:3px;padding:0 5px;c
   .side{text-align:left;display:flex;gap:14px;flex-wrap:wrap}
   .freq{font-size:13.5vw}
   #dial{width:100%;margin:0;border-radius:0;height:180px}
+  .cw{margin:0;border-radius:0;padding:12px 16px 14px}
   .ctl{grid-template-columns:1fr;padding:20px 16px 4px}
   .knobwrap{grid-row:auto}
   .knob{width:150px;height:150px}
@@ -150,6 +163,10 @@ kbd{font:inherit;border:1px solid var(--faint);border-radius:3px;padding:0 5px;c
     </div>
   </div>
   <canvas id="dial" aria-label="Tuning dial and spectrum. Drag to tune."></canvas>
+  <div class="cw" id="cwbox">
+    <div class="cwh"><span class="lab">morse</span><i id="cwkey"></i><span id="cwinfo">no signal</span><button id="cwclear">Clear</button></div>
+    <div class="cwt" id="cwtext"></div>
+  </div>
   <div class="note" id="note"></div>
 
   <div class="ctl">
@@ -459,15 +476,17 @@ function onSnd(buf){
   if(!pcm.length)return;
   if(!gotAudio){gotAudio=true;conn='on';clearTimeout(connT);$('rec').disabled=false;showOn();audioSince=performance.now();clearInterval(afT);afT=setInterval(audioWf,100)}
   recFeed(pcm);
+  if(S.mode==='cw')cwFeed(pcm);
   const f=new Float32Array(pcm.length);for(let i=0;i<f.length;i++)f[i]=pcm[i]/32768;
   audioPush(f);
 }
 function showOn(){setStatus('<b>On</b> · '+esc(rxTarget()[2])+(limits?' · '+limits:''))}
 let tuneT=0,cfT=0;
+const cwOff=()=>S.mode==='cw'?(MODES.cw[1]+MODES.cw[2])/2000:0;  // kHz
 function tuneNow(){
   if(!snd||snd.readyState!==1)return;
   const m=MODES[S.mode];
-  snd.send('SET mod='+S.mode+' low_cut='+m[1]+' high_cut='+m[2]+' freq='+(S.freq-foff).toFixed(3));
+  snd.send('SET mod='+S.mode+' low_cut='+m[1]+' high_cut='+m[2]+' freq='+(S.freq-foff-cwOff()).toFixed(3));
   if(!cfT)cfT=setTimeout(()=>{cfT=0;wfSend('SET zoom='+S.zoom+' cf='+(S.freq-foff).toFixed(3))},140);
 }
 /* waterfall / spectrum stream (only some receiver channels offer it) */
@@ -521,7 +540,7 @@ function audioWf(){
     afRow[i]=clamp(Math.round((isFinite(db)?db:-200)+255),0,255)}
   if(!one)wfPush(f-hi/1000,2*hi/1000,afRow);
   else if(m[1]<0)wfPush(f-hi/1000,(hi-lo)/1000,afRow);
-  else wfPush(f+lo/1000,(hi-lo)/1000,afRow);
+  else wfPush(f-cwOff()+lo/1000,(hi-lo)/1000,afRow);
 }
 
 /* ---------- S-meter ---------- */
@@ -551,7 +570,8 @@ function stepBy(dir,size,grid){
   const g=S.freq/size,on=Math.abs(g-Math.round(g))<1e-6;
   setFreq(on?S.freq+dir*size:(dir>0?Math.ceil(g):Math.floor(g))*size);
 }
-function setMode(m){S.mode=m;store.set('mode',m);pressed('modes',m);$('dmode').textContent=MODES[m][0];dirty=true;if(conn==='on')tuneNow()}
+function setMode(m){S.mode=m;store.set('mode',m);pressed('modes',m);$('dmode').textContent=MODES[m][0];dirty=true;
+  document.querySelector('.rx').classList.toggle('cwon',m==='cw');cwReset();if(conn==='on')tuneNow()}
 function setStep(s){S.step=s;store.set('step',s);pressed('steps',String(s))}
 function setZoom(z){S.zoom=z;store.set('zoom',z);pressed('zooms',String(z));dirty=true;wfSend('SET zoom='+z+' cf='+(S.freq-foff).toFixed(3))}
 function bandOf(f){return BANDS.findIndex(b=>f>=b[1]&&f<=b[2])}
@@ -585,7 +605,7 @@ function draw(){
   if(wfRows.length){cx.imageSmoothingEnabled=false;const rh=wh/WFROWS;
     for(let j=0;j<wfRows.length;j++){const r=wfRows[j];cx.drawImage(wfC,0,j,1024,1,x(r.start),wy+j*rh,r.span/span*W,rh+0.6)}}
   // passband
-  const m=MODES[S.mode],px0=x(S.freq+m[1]/1000),px1=x(S.freq+m[2]/1000);
+  const m=MODES[S.mode],co=cwOff(),px0=x(S.freq-co+m[1]/1000),px1=x(S.freq-co+m[2]/1000);
   cx.fillStyle='rgba(255,255,255,.10)';cx.fillRect(px0,top,Math.max(1,px1-px0),H-top);
   // spectrum line
   if(wfLine&&wfLineMeta&&wfRows.length){
@@ -635,6 +655,71 @@ const FONT='"Helvetica Neue",Helvetica,Arial,sans-serif';
   const end=()=>last=null;k.addEventListener('pointerup',end);k.addEventListener('pointercancel',end);
   k.addEventListener('wheel',e=>{e.preventDefault();const s=e.deltaY<0?1:-1;rot+=s*12;k.style.transform='rotate('+rot+'deg)';stepBy(s,S.step)},{passive:false});
 })();
+
+/* ---------- Morse decoder (CW mode) ----------
+   Tone detection: nine Goertzel filters across the 300-700 Hz passband, 10.7 ms window every 4 ms. The strongest
+   becomes the key signal; the others give the noise level. Timing: dot length is learned from the recent marks. */
+const MORSE={'.-':'A','-...':'B','-.-.':'C','-..':'D','.':'E','..-.':'F','--.':'G','....':'H','..':'I','.---':'J','-.-':'K','.-..':'L',
+ '--':'M','-.':'N','---':'O','.--.':'P','--.-':'Q','.-.':'R','...':'S','-':'T','..-':'U','...-':'V','.--':'W','-..-':'X','-.--':'Y','--..':'Z',
+ '-----':'0','.----':'1','..---':'2','...--':'3','....-':'4','.....':'5','-....':'6','--...':'7','---..':'8','----.':'9',
+ '.-.-.-':'.','--..--':',','..--..':'?','-..-.':'/','-...-':'=','.-.-.':'+','-....-':'-','.----.':"'",'---...':':','-.--.-':')',
+ '.-..-.':'"','.--.-.':'@','...-.-':'<SK>','-.--.':'<KN>','.-...':'<AS>','........':'<ERR>'};
+const CWF=[300,350,400,450,500,550,600,650,700],CWN=128,CWHOP=48;
+const cw={ring:new Float32Array(CWN),w:0,c:0,avg:new Float32Array(CWF.length),best:4,noise:0,hi:0,key:false,pend:0,
+  t:0,tCh:0,sym:'',dot:60,marks:[],spaced:true,text:'',sig:false,lastUi:0};
+function cwReset(){cw.avg.fill(0);cw.noise=0;cw.hi=0;cw.key=false;cw.pend=0;cw.sym='';cw.marks.length=0;cw.spaced=true;cw.sig=false;cw.tCh=cw.t;cwUi(true)}
+function cwOut(ch){cw.text=(cw.text+ch).slice(-2000);const el=$('cwtext');el.textContent=cw.text;el.scrollTop=el.scrollHeight}
+function cwUi(force){
+  const now=performance.now();if(!force&&now-cw.lastUi<400)return;cw.lastUi=now;
+  $('cwinfo').textContent=cw.sig?CWF[cw.best]+' Hz · '+Math.round(1200/cw.dot)+' wpm':'no signal';
+}
+function cwDot(dur){
+  // learn the dot length: split the recent marks into short and long (Otsu on log duration)
+  const m=cw.marks;m.push(dur);if(m.length>30)m.shift();
+  let est=0;
+  if(m.length>=6){
+    const a=m.map(Math.log).sort((x,y)=>x-y),n=a.length,tot=a.reduce((x,y)=>x+y,0);let s=0,bv=-1,bi=1;
+    for(let i=1;i<n;i++){s+=a[i-1];const m1=s/i,m2=(tot-s)/(n-i),v=i*(n-i)*(m2-m1)*(m2-m1);if(v>bv){bv=v;bi=i}}
+    let s1=0;for(let i=0;i<bi;i++)s1+=a[i];const g1=Math.exp(s1/bi),g2=Math.exp((tot-s1)/(n-bi)),r=g2/g1;
+    if(r>=2&&r<=4.5)est=(g1+g2/3)/2;
+    else if(r<2){const g=Math.exp(tot/n);est=g<1.7*cw.dot?g:g<4.5*cw.dot?g/3:0}
+    if(est)cw.dot=clamp(cw.dot*0.6+est*0.4,20,300);
+  }else cw.dot=clamp(cw.dot*0.7+(dur<2*cw.dot?dur:dur/3)*0.3,20,300);
+}
+function cwFeed(pcm){
+  const hopMs=CWHOP/srcRate*1000,ring=cw.ring;
+  for(let i=0;i<pcm.length;i++){
+    ring[cw.w]=pcm[i];cw.w=(cw.w+1)&(CWN-1);
+    if(++cw.c<CWHOP)continue;cw.c=0;cw.t+=hopMs;
+    // Goertzel magnitudes over the last CWN samples
+    const mag=[];
+    for(let k=0;k<CWF.length;k++){const co=2*Math.cos(2*Math.PI*CWF[k]/srcRate);let s1=0,s2=0;
+      for(let j=0;j<CWN;j++){const s0=ring[(cw.w+j)&(CWN-1)]+co*s1-s2;s2=s1;s1=s0}
+      mag.push(Math.sqrt(Math.max(0,s1*s1+s2*s2-co*s1*s2)))}
+    let b=cw.best;for(let k=0;k<mag.length;k++){cw.avg[k]+=(mag[k]*mag[k]-cw.avg[k])*0.004;if(cw.avg[k]>cw.avg[b]*1.5)b=k}
+    cw.best=b;
+    const off=mag.filter((v,k)=>Math.abs(k-b)>=2).sort((x,y)=>x-y),med=off[off.length>>1];
+    cw.noise+=(med-cw.noise)*0.02;
+    const e=mag[b];
+    cw.hi=e>cw.hi?cw.hi+(e-cw.hi)*0.3:cw.hi*0.9985;
+    const on=cw.key?e>Math.max(cw.noise*3,cw.hi*0.3):e>Math.max(cw.noise*4.5,cw.hi*0.5);
+    // debounce: a change must hold for two hops (8 ms)
+    if(on!==cw.key){if(++cw.pend>=2){
+        const tEdge=cw.t-hopMs,dur=tEdge-cw.tCh;cw.tCh=tEdge;cw.key=on;cw.pend=0;
+        if(!on){ // a mark just ended
+          if(dur>=Math.max(10,cw.dot*0.25)){cwDot(dur);if(cw.sym.length<9)cw.sym+=dur<2*cw.dot?'.':'-';cw.spaced=false;cw.sig=true}
+        }
+        $('cwkey').className=on?'on':'';
+      }}else cw.pend=0;
+    if(!cw.key){
+      const gap=cw.t-cw.tCh;
+      if(cw.sym&&gap>2*cw.dot){cwOut(MORSE[cw.sym]||'?');cw.sym=''}
+      if(!cw.sym&&!cw.spaced&&gap>5*cw.dot){cwOut(' ');cw.spaced=true}
+      if(cw.sig&&gap>4000){cw.sig=false;cwUi(true)}
+    }
+    cwUi(false);
+  }
+}
 
 /* ---------- recorder ---------- */
 const rec={on:false,chunks:[],n:0,pre:[],preN:0,meta:null,timer:0},recs=[];
@@ -721,6 +806,7 @@ $('pre').value=String(S.pre);$('pre').addEventListener('change',e=>{S.pre=+e.tar
 $('power').addEventListener('click',()=>setPower(!power));
 $('rec').addEventListener('click',()=>rec.on?recStop():recStart());
 $('memadd').addEventListener('click',memAdd);
+$('cwclear').addEventListener('click',()=>{cw.text='';$('cwtext').textContent=''});
 $('memname').addEventListener('keydown',e=>{if(e.key==='Enter')memAdd()});
 (function(){
   const sel=$('rxsel');RX.forEach((r,i)=>sel.add(new Option(r[0],i)));sel.add(new Option('Custom…','custom'));
@@ -759,7 +845,7 @@ addEventListener('keydown',e=>{
 
 /* ---------- start ---------- */
 setInterval(()=>{const d=new Date(),p=x=>String(x).padStart(2,'0');$('utc').textContent=p(d.getUTCHours())+':'+p(d.getUTCMinutes())+':'+p(d.getUTCSeconds())+' UTC'},1000);
-$('dmode').textContent=MODES[S.mode][0];
+$('dmode').textContent=MODES[S.mode][0];document.querySelector('.rx').classList.toggle('cwon',S.mode==='cw');
 showFreq();drawMems();drawRecs();drawMeter();resize();requestAnimationFrame(draw);
 </script>
 </body>
