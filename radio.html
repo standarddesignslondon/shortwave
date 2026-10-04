@@ -320,11 +320,12 @@ class P extends AudioWorkletProcessor{
   process(i,o){this.ring.pull(o[0][0]);return true}
 }
 registerProcessor('sw1',P);`;
-let ctx=null,gain=null,node=null,ring=null,audioReady=null;
+let ctx=null,gain=null,node=null,ring=null,audioReady=null,an=null,anBuf=null;
+function chain(c){an=c.createAnalyser();an.fftSize=2048;an.smoothingTimeConstant=0.5;anBuf=new Float32Array(an.frequencyBinCount);node.connect(an);an.connect(gain)}
 function audioStart(rate){
   const want=Math.round(rate||12000);
   if(ctx&&Math.abs(ctx.sampleRate-want)<=want*0.003){if(ctx.state!=='running')ctx.resume();return audioReady}
-  if(ctx){try{ctx.close()}catch(e){}ctx=null;node=null;ring=null}
+  if(ctx){try{ctx.close()}catch(e){}ctx=null;node=null;ring=null;an=null}
   const AC=window.AudioContext||window.webkitAudioContext;
   try{ctx=new AC({sampleRate:want,latencyHint:'playback'})}catch(e){ctx=new AC()}
   gain=ctx.createGain();gain.connect(ctx.destination);setVol();
@@ -337,7 +338,7 @@ function audioStart(rate){
         await c.audioWorklet.addModule(url);
         if(c!==ctx)return;
         node=new AudioWorkletNode(c,'sw1',{numberOfInputs:0,numberOfOutputs:1,outputChannelCount:[1]});
-        node.connect(gain);node.port.postMessage({rate:srcRate});return;
+        chain(c);node.port.postMessage({rate:srcRate});return;
       }catch(e){}
     }
     if(c!==ctx)return;
@@ -345,7 +346,7 @@ function audioStart(rate){
     ring=new Ring(c.sampleRate);ring.setRate(srcRate);
     node=c.createScriptProcessor(2048,0,1);
     node.onaudioprocess=e=>ring.pull(e.outputBuffer.getChannelData(0));
-    node.connect(gain);
+    chain(c);
   })();
   return audioReady;
 }
@@ -377,7 +378,7 @@ function closeSockets(){
   clearInterval(ka);ka=0;clearTimeout(connT);connT=0;clearTimeout(tuneT);tuneT=0;clearTimeout(cfT);cfT=0;
   const a=snd,b=wf;snd=wf=null;
   for(const s of [a,b])if(s){s.onopen=s.onmessage=s.onclose=s.onerror=null;try{s.close()}catch(e){}}
-  wfRows.length=0;wfSeen=false;
+  wfRows.length=0;wfSeen=false;wfReal=false;wfLineMeta=null;clearInterval(afT);afT=0;
 }
 function setPower(on,msg){
   power=on;$('power').setAttribute('aria-pressed',on);
@@ -456,7 +457,7 @@ function onSnd(buf){
     for(let i=0;i<d.length;i++){pcm[2*i]=adpcmOne(d[i]&15);pcm[2*i+1]=adpcmOne(d[i]>>4)}}
   else{const n=(u.length-10)>>1,le=!!(flags&0x80);pcm=new Int16Array(n);for(let i=0;i<n;i++)pcm[i]=dv.getInt16(10+2*i,le)}
   if(!pcm.length)return;
-  if(!gotAudio){gotAudio=true;conn='on';clearTimeout(connT);$('rec').disabled=false;showOn()}
+  if(!gotAudio){gotAudio=true;conn='on';clearTimeout(connT);$('rec').disabled=false;showOn();audioSince=performance.now();clearInterval(afT);afT=setInterval(audioWf,100)}
   recFeed(pcm);
   const f=new Float32Array(pcm.length);for(let i=0;i<f.length;i++)f[i]=pcm[i]/32768;
   audioPush(f);
@@ -485,8 +486,13 @@ function onWf(buf){
   const u=new Uint8Array(buf);if(u.length<4)return;
   if(u[0]===77){onMsg(dec.decode(u.subarray(4)),true);return}
   if(u[0]!==87||u.length<16+64)return;  // 'W/F'
-  const dv=new DataView(buf),xbin=dv.getUint32(4,true),zoom=dv.getUint32(8,true)&0xffff,d=u.subarray(16),n=Math.min(1024,d.length);
-  const span=maxKHz/Math.pow(2,zoom),start=xbin/(1024*16384)*maxKHz+foff;
+  const dv=new DataView(buf),xbin=dv.getUint32(4,true),zoom=dv.getUint32(8,true)&0xffff,d=u.subarray(16);
+  if(!wfReal){wfReal=true;wfRows.length=0;wfSeen=false;wfLineMeta=null}  // the receiver's own spectrum replaces the audio one
+  wfPush(xbin/(1024*16384)*maxKHz+foff,maxKHz/Math.pow(2,zoom),d);
+}
+// one spectrum row: d = bytes, dB = byte - 255, covering span kHz from start kHz
+function wfPush(start,span,d){
+  const n=Math.min(1024,d.length);
   // noise floor: 15th percentile, smoothed
   const hist=new Uint16Array(256);for(let i=0;i<n;i++)hist[d[i]]++;
   let acc=0,p=0;for(;p<256;p++){acc+=hist[p];if(acc>n*0.15)break}
@@ -500,6 +506,22 @@ function onWf(buf){
   const same=wfLineMeta&&wfLineMeta.start===start&&wfLineMeta.span===span;
   for(let i=0;i<n;i++){const db=d[i]-255;wfLine[i]=same?wfLine[i]+(db-wfLine[i])*0.45:db}
   wfLineMeta={start,span};dirty=true;
+}
+/* fallback: when the receiver sends no spectrum, draw one from the audio itself.
+   It covers only the passband around the needle: mirrored either side of the carrier in AM/FM, one side in SSB/CW. */
+let wfReal=false,afT=0,audioSince=0;const afRow=new Uint8Array(1024),fHist=[];
+function fAgo(ms){const t=performance.now()-ms;for(let i=fHist.length-1;i>=0;i--)if(fHist[i][0]<=t)return fHist[i][1];return fHist.length?fHist[0][1]:S.freq}
+function audioWf(){
+  if(conn!=='on'||wfReal||!an||!ctx||ctx.state!=='running'||performance.now()-audioSince<2500)return;
+  an.getFloatFrequencyData(anBuf);
+  const m=MODES[S.mode],one=m[1]*m[2]>0,lo=one?Math.min(Math.abs(m[1]),Math.abs(m[2])):0,hi=Math.max(Math.abs(m[1]),Math.abs(m[2]));
+  const hzBin=ctx.sampleRate/an.fftSize,last=anBuf.length-1,f=fAgo(350);  // the audio heard now was tuned about 0.35 s ago
+  for(let i=0;i<1024;i++){const t=(i+0.5)/1024,hz=!one?Math.abs(2*t-1)*hi:m[1]<0?hi-t*(hi-lo):lo+t*(hi-lo);
+    const b=Math.min(last,hz/hzBin),b0=b|0,db=anBuf[b0]+(anBuf[Math.min(last,b0+1)]-anBuf[b0])*(b-b0);
+    afRow[i]=clamp(Math.round((isFinite(db)?db:-200)+255),0,255)}
+  if(!one)wfPush(f-hi/1000,2*hi/1000,afRow);
+  else if(m[1]<0)wfPush(f-hi/1000,(hi-lo)/1000,afRow);
+  else wfPush(f+lo/1000,(hi-lo)/1000,afRow);
 }
 
 /* ---------- S-meter ---------- */
@@ -520,6 +542,7 @@ function setFreq(f,opt){
   f=clamp(r2(f),0,maxKHz+foff);
   if(f===S.freq&&!opt)return;
   S.freq=f;store.set('freq',f);showFreq();dirty=true;
+  fHist.push([performance.now(),f]);if(fHist.length>64)fHist.shift();
   if(conn==='on'&&!tuneT)tuneT=setTimeout(()=>{tuneT=0;tuneNow()},20);
 }
 function stepBy(dir,size,grid){
@@ -572,8 +595,9 @@ function draw(){
     cx.strokeStyle='#f1f0ec';cx.lineWidth=1;cx.stroke();
   }else{
     cx.fillStyle='#5d5b57';cx.font='11px '+FONT;cx.textAlign='center';
-    cx.fillText(conn==='on'?'No spectrum on this receiver channel':conn==='connecting'?'Connecting':'',W/2,top+specH/2);
+    cx.fillText(conn==='connecting'?'Connecting':'',W/2,top+specH/2);
   }
+  if(wfRows.length&&!wfReal){cx.fillStyle='#8a8882';cx.font='10px '+FONT;cx.textAlign='left';cx.fillText('AUDIO SPECTRUM',10,top+16)}
   // scale
   const steps=[0.1,0.5,1,5,10,50,100,500,1000];let maj=steps.find(s=>s/span*W>=64)||1000;
   const minr=maj/5;cx.strokeStyle='#6a6863';cx.fillStyle='#a3a19b';cx.lineWidth=1;cx.font='10px '+FONT;cx.textAlign='center';
