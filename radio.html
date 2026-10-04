@@ -663,12 +663,22 @@ const MORSE={'.-':'A','-...':'B','-.-.':'C','-..':'D','.':'E','..-.':'F','--.':'
  '--':'M','-.':'N','---':'O','.--.':'P','--.-':'Q','.-.':'R','...':'S','-':'T','..-':'U','...-':'V','.--':'W','-..-':'X','-.--':'Y','--..':'Z',
  '-----':'0','.----':'1','..---':'2','...--':'3','....-':'4','.....':'5','-....':'6','--...':'7','---..':'8','----.':'9',
  '.-.-.-':'.','--..--':',','..--..':'?','-..-.':'/','-...-':'=','.-.-.':'+','-....-':'-','.----.':"'",'---...':':','-.--.-':')',
- '.-..-.':'"','.--.-.':'@','...-.-':'<SK>','-.--.':'<KN>','.-...':'<AS>','........':'<ERR>'};
+ '.-..-.':'"','.--.-.':'@','...-.-':'<SK>','-.--.':'<KN>','.-...':'<AS>'};
 const CWF=[300,350,400,450,500,550,600,650,700],CWN=128,CWHOP=48;
 const cw={ring:new Float32Array(CWN),w:0,c:0,avg:new Float32Array(CWF.length),best:4,noise:0,hi:0,key:false,pend:0,
-  t:0,tCh:0,sym:'',dot:60,marks:[],spaced:true,text:'',sig:false,lastUi:0};
-function cwReset(){cw.avg.fill(0);cw.noise=0;cw.hi=0;cw.key=false;cw.pend=0;cw.sym='';cw.marks.length=0;cw.spaced=true;cw.sig=false;cw.tCh=cw.t;cwUi(true)}
+  t:0,tCh:0,sym:'',dot:60,marks:[],words:0,hold:'',text:'',sig:false,lastUi:0};
+function cwReset(){cw.avg.fill(0);cw.noise=0;cw.hi=0;cw.key=false;cw.pend=0;cw.sym='';cw.marks.length=0;cw.words=0;cw.hold='';cw.sig=false;cw.tCh=cw.t;cwUi(true)}
 function cwOut(ch){cw.text=(cw.text+ch).slice(-2000);const el=$('cwtext');el.textContent=cw.text;el.scrollTop=el.scrollHeight}
+// A lone E or T between word gaps is almost always a noise click, so a single-element character that starts a word
+// is held back until a second character follows it.
+function cwChar(sym){
+  const ch=MORSE[sym];
+  if(!cw.words&&sym.length===1){cw.hold=ch;cw.words=1;return}
+  if(cw.hold){cwOut(cw.hold);cw.hold=''}
+  if(ch)cwOut(ch);else if(!/\?\s?$/.test(cw.text))cwOut('?');
+  cw.words++;
+}
+function cwWord(){if(cw.hold)cw.hold='';else if(cw.words&&!/\s$/.test(cw.text))cwOut(' ');cw.words=0}
 function cwUi(force){
   const now=performance.now();if(!force&&now-cw.lastUi<400)return;cw.lastUi=now;
   $('cwinfo').textContent=cw.sig?CWF[cw.best]+' Hz · '+Math.round(1200/cw.dot)+' wpm':'no signal';
@@ -683,8 +693,8 @@ function cwDot(dur){
     let s1=0;for(let i=0;i<bi;i++)s1+=a[i];const g1=Math.exp(s1/bi),g2=Math.exp((tot-s1)/(n-bi)),r=g2/g1;
     if(r>=2&&r<=4.5)est=(g1+g2/3)/2;
     else if(r<2){const g=Math.exp(tot/n);est=g<1.7*cw.dot?g:g<4.5*cw.dot?g/3:0}
-    if(est)cw.dot=clamp(cw.dot*0.6+est*0.4,20,300);
-  }else cw.dot=clamp(cw.dot*0.7+(dur<2*cw.dot?dur:dur/3)*0.3,20,300);
+    if(est)cw.dot=clamp(cw.dot*0.6+est*0.4,26,300);
+  }else cw.dot=clamp(cw.dot*0.7+(dur<2*cw.dot?dur:dur/3)*0.3,26,300);
 }
 function cwFeed(pcm){
   const hopMs=CWHOP/srcRate*1000,ring=cw.ring;
@@ -707,14 +717,14 @@ function cwFeed(pcm){
     if(on!==cw.key){if(++cw.pend>=2){
         const tEdge=cw.t-hopMs,dur=tEdge-cw.tCh;cw.tCh=tEdge;cw.key=on;cw.pend=0;
         if(!on){ // a mark just ended
-          if(dur>=Math.max(10,cw.dot*0.25)){cwDot(dur);if(cw.sym.length<9)cw.sym+=dur<2*cw.dot?'.':'-';cw.spaced=false;cw.sig=true}
+          if(dur>=Math.max(20,cw.dot*0.3)){cwDot(dur);if(cw.sym.length<9)cw.sym+=dur<2*cw.dot?'.':'-';cw.sig=true}
         }
         $('cwkey').className=on?'on':'';
       }}else cw.pend=0;
     if(!cw.key){
       const gap=cw.t-cw.tCh;
-      if(cw.sym&&gap>2*cw.dot){cwOut(MORSE[cw.sym]||'?');cw.sym=''}
-      if(!cw.sym&&!cw.spaced&&gap>5*cw.dot){cwOut(' ');cw.spaced=true}
+      if(cw.sym&&gap>2*cw.dot){cwChar(cw.sym);cw.sym=''}
+      if(!cw.sym&&cw.words&&gap>5*cw.dot)cwWord();
       if(cw.sig&&gap>4000){cw.sig=false;cwUi(true)}
     }
     cwUi(false);
