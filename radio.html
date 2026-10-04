@@ -1,0 +1,742 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#e9e7e2">
+<title>SW 1 · shortwave receiver</title>
+<style>
+:root{
+  --body:#e9e7e2; --panel:#f3f2ee; --ink:#141414; --mid:#77746e; --faint:#b9b6af; --line:#cfccc5;
+  --dark:#0e0e0e; --dark2:#1b1b1b; --lit:#f1f0ec; --dim:#8a8882; --rec:#d8431f;
+  --sans:"Helvetica Neue",Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{background:var(--body);color:var(--ink);font-family:var(--sans);font-size:13px;line-height:1.35;
+  -webkit-font-smoothing:antialiased;padding:24px 16px 48px}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer;-webkit-tap-highlight-color:transparent}
+.rx{max-width:940px;margin:0 auto;background:var(--panel);border:1px solid var(--line);border-radius:6px;
+  box-shadow:0 1px 0 #fff inset,0 18px 40px -28px rgba(0,0,0,.45)}
+.lab{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--mid)}
+
+/* head */
+.head{display:flex;align-items:center;gap:16px;padding:16px 22px}
+.brand{font-size:15px;font-weight:500;letter-spacing:.02em;white-space:nowrap}
+.brand span{color:var(--mid);font-weight:400;margin-left:10px}
+.status{margin-left:auto;color:var(--mid);text-align:right;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.status b{font-weight:500;color:var(--ink)}
+.sw{display:flex;align-items:center;gap:9px;background:none;border:0;flex:none}
+.sw i{display:block;width:44px;height:22px;border-radius:11px;background:#d5d2cb;border:1px solid #bdbab3;position:relative;transition:background .15s}
+.sw i::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;
+  box-shadow:0 1px 2px rgba(0,0,0,.35);transition:transform .15s}
+.sw[aria-pressed=true] i{background:var(--ink);border-color:var(--ink)}
+.sw[aria-pressed=true] i::after{transform:translateX(22px)}
+
+/* display */
+.disp{background:var(--dark);color:var(--lit);margin:0 22px;border-radius:3px 3px 0 0;padding:18px 22px 14px;
+  display:grid;grid-template-columns:1fr auto;gap:8px 24px;align-items:end}
+.freq{font-size:68px;font-weight:300;letter-spacing:-.02em;line-height:1;font-variant-numeric:tabular-nums;white-space:nowrap}
+.freq small{font-size:15px;font-weight:400;letter-spacing:.08em;color:var(--dim);margin-left:10px}
+.freq.entry{color:#fff}
+.freq.entry .cur{display:inline-block;width:.5em;border-bottom:3px solid #fff;animation:bl 1s steps(2) infinite}
+@keyframes bl{50%{opacity:0}}
+.side{text-align:right;color:var(--dim);font-variant-numeric:tabular-nums}
+.side div{white-space:nowrap}
+.side .big{color:var(--lit);font-size:15px;letter-spacing:.06em}
+.meter{grid-column:1/-1;display:grid;grid-template-columns:1fr auto;gap:14px;align-items:center;margin-top:6px}
+.mtrack{height:22px;position:relative}
+.mtrack::before{content:"";position:absolute;left:0;right:0;top:4px;height:3px;background:#2b2b2b}
+.mfill{position:absolute;left:0;top:4px;height:3px;width:0;background:var(--lit);transition:width .12s linear}
+.mtick{position:absolute;top:11px;font-size:9px;color:var(--dim);transform:translateX(-50%);letter-spacing:.04em}
+.mtick::before{content:"";position:absolute;left:50%;top:-5px;width:1px;height:4px;background:#555}
+.mread{color:var(--dim);font-variant-numeric:tabular-nums;min-width:108px;text-align:right}
+#dial{display:block;width:calc(100% - 44px);height:210px;margin:0 22px;background:var(--dark);border-top:1px solid #262626;
+  border-radius:0 0 3px 3px;touch-action:none;cursor:ew-resize}
+
+/* controls */
+.ctl{display:grid;grid-template-columns:auto 1fr;gap:22px 30px;padding:24px 22px 8px;align-items:start}
+.knobwrap{grid-row:span 3;display:flex;flex-direction:column;align-items:center;gap:10px}
+.knob{width:132px;height:132px;border-radius:50%;background:radial-gradient(circle at 50% 38%,#fbfaf8,#dcd9d2);
+  border:1px solid #b9b6af;box-shadow:0 10px 18px -10px rgba(0,0,0,.5),0 0 0 7px #e4e1db,0 0 0 8px var(--line);
+  position:relative;touch-action:none;cursor:grab;margin:8px}
+.knob:active{cursor:grabbing}
+.knob b{position:absolute;left:50%;top:9px;width:3px;height:18px;margin-left:-1.5px;background:var(--ink);border-radius:2px}
+.row{display:flex;flex-direction:column;gap:7px;min-width:0}
+.seg{display:flex;flex-wrap:wrap;gap:0}
+.seg button{background:transparent;border:1px solid var(--faint);margin:0 -1px -1px 0;padding:7px 11px;min-width:44px;
+  font-size:12px;letter-spacing:.04em;font-variant-numeric:tabular-nums}
+.seg button:hover{background:#e8e5df}
+.seg button[aria-pressed=true]{background:var(--ink);border-color:var(--ink);color:#fff;position:relative;z-index:1}
+.pair{display:grid;grid-template-columns:1fr auto;gap:22px 30px;align-items:end}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:22px;background:transparent}
+input[type=range]::-webkit-slider-runnable-track{height:3px;background:var(--faint)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:var(--ink);margin-top:-7.5px}
+input[type=range]::-moz-range-track{height:3px;background:var(--faint)}
+input[type=range]::-moz-range-thumb{width:18px;height:18px;border:0;border-radius:50%;background:var(--ink)}
+
+/* lower sections */
+.sec{border-top:1px solid var(--line);margin:18px 22px 0;padding:18px 0 4px}
+.sec:last-of-type{padding-bottom:20px}
+.sech{display:flex;align-items:center;gap:14px;margin-bottom:12px;flex-wrap:wrap}
+.recbtn{width:54px;height:54px;border-radius:50%;border:1px solid #b9b6af;background:radial-gradient(circle at 50% 38%,#fbfaf8,#dcd9d2);
+  display:grid;place-items:center;flex:none}
+.recbtn i{width:18px;height:18px;border-radius:50%;background:var(--rec);transition:border-radius .12s,transform .12s}
+.recbtn[aria-pressed=true] i{border-radius:3px;transform:scale(.85);animation:pu 1.2s ease-in-out infinite}
+.recbtn:disabled{opacity:.4;cursor:default}
+@keyframes pu{50%{opacity:.45}}
+.rtime{font-size:26px;font-weight:300;font-variant-numeric:tabular-nums;min-width:86px}
+.rtime.on{color:var(--rec)}
+.sel{border:1px solid var(--faint);background:transparent;padding:7px 9px;border-radius:0;max-width:100%}
+.txt{border:0;border-bottom:1px solid var(--faint);background:transparent;padding:7px 2px;min-width:0;border-radius:0;outline:0}
+.txt:focus{border-color:var(--ink)}
+.btn{border:1px solid var(--faint);background:transparent;padding:7px 12px;font-size:12px;letter-spacing:.04em}
+.btn:hover{background:#e8e5df}
+.list{list-style:none}
+.list li{display:flex;align-items:center;gap:12px;padding:8px 0;border-top:1px solid var(--line);font-variant-numeric:tabular-nums}
+.list li .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.list li .dm{color:var(--mid);white-space:nowrap}
+.list a.btn{text-decoration:none;color:inherit}
+.empty{color:var(--mid);padding:6px 0 10px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{display:flex;border:1px solid var(--faint)}
+.chip button{background:none;border:0;padding:7px 10px;font-size:12px;font-variant-numeric:tabular-nums}
+.chip button:hover{background:#e8e5df}
+.chip button.x{color:var(--mid);border-left:1px solid var(--line);padding:7px 9px}
+.grow{flex:1;min-width:120px}
+.note{background:var(--ink);color:#fff;margin:14px 22px 0;padding:14px 16px;border-radius:3px;display:none;line-height:1.5}
+.note b{font-weight:500}
+.keys{color:var(--mid);padding:16px 22px 20px;display:flex;flex-wrap:wrap;gap:6px 18px;font-size:11.5px}
+kbd{font:inherit;border:1px solid var(--faint);border-radius:3px;padding:0 5px;color:var(--ink);background:#fff}
+:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+
+@media (max-width:700px){
+  body{padding:0 0 32px}
+  .rx{border-radius:0;border-left:0;border-right:0}
+  .head{padding:14px 16px}.brand span{display:none}
+  .disp{margin:0;border-radius:0;padding:16px;grid-template-columns:1fr}
+  .side{text-align:left;display:flex;gap:14px;flex-wrap:wrap}
+  .freq{font-size:13.5vw}
+  #dial{width:100%;margin:0;border-radius:0;height:180px}
+  .ctl{grid-template-columns:1fr;padding:20px 16px 4px}
+  .knobwrap{grid-row:auto}
+  .knob{width:150px;height:150px}
+  .pair{grid-template-columns:1fr}
+  .seg button{padding:10px 12px}
+  .sec{margin:18px 16px 0}.note{margin:14px 16px 0}.keys{display:none}
+  .mread{min-width:0}
+}
+</style>
+</head>
+<body>
+<main class="rx">
+  <div class="head">
+    <div class="brand">SW 1<span>shortwave receiver</span></div>
+    <div class="status" id="status">Off</div>
+    <button class="sw" id="power" aria-pressed="false" aria-label="Power"><span class="lab">power</span><i></i></button>
+  </div>
+
+  <div class="disp">
+    <div class="freq" id="freq"></div>
+    <div class="side">
+      <div class="big" id="dmode">AM</div>
+      <div id="dband">&nbsp;</div>
+      <div id="utc">00:00:00 UTC</div>
+    </div>
+    <div class="meter">
+      <div class="mtrack" id="mtrack"><div class="mfill" id="mfill"></div></div>
+      <div class="mread" id="mread">&nbsp;</div>
+    </div>
+  </div>
+  <canvas id="dial" aria-label="Tuning dial and spectrum. Drag to tune."></canvas>
+  <div class="note" id="note"></div>
+
+  <div class="ctl">
+    <div class="knobwrap">
+      <div class="knob" id="knob" role="slider" aria-label="Tuning" tabindex="0"><b></b></div>
+      <span class="lab">tuning</span>
+    </div>
+    <div class="row"><span class="lab">step · kHz</span><div class="seg" id="steps"></div></div>
+    <div class="row"><span class="lab">mode</span><div class="seg" id="modes"></div></div>
+    <div class="row"><span class="lab">band</span><div class="seg" id="bands"></div></div>
+    <div class="pair" style="grid-column:1/-1">
+      <div class="row"><span class="lab">volume</span><input type="range" id="vol" min="0" max="100" step="1" aria-label="Volume"></div>
+      <div class="row"><span class="lab">dial span</span><div class="seg" id="zooms"></div></div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sech">
+      <button class="recbtn" id="rec" aria-pressed="false" aria-label="Record" disabled><i></i></button>
+      <div class="rtime" id="rtime">00:00</div>
+      <span class="lab">recorder · wav</span>
+      <span style="margin-left:auto" class="lab">include the last</span>
+      <select class="sel" id="pre" aria-label="Pre-roll">
+        <option value="0">0 s</option><option value="10">10 s</option><option value="30">30 s</option><option value="60">60 s</option>
+      </select>
+    </div>
+    <ul class="list" id="recs"></ul>
+    <div class="empty" id="recempty">No recordings yet. Recordings stay in this tab until you save them.</div>
+  </div>
+
+  <div class="sec">
+    <div class="sech">
+      <span class="lab">memory</span>
+      <input class="txt grow" id="memname" placeholder="Name (optional)" maxlength="40" aria-label="Memory name">
+      <button class="btn" id="memadd">Store current</button>
+    </div>
+    <div class="chips" id="mems"></div>
+  </div>
+
+  <div class="sec">
+    <div class="sech">
+      <span class="lab">receiver</span>
+      <select class="sel grow" id="rxsel" aria-label="Receiver"></select>
+      <input class="txt" id="rxcustom" placeholder="or host:port" size="22" aria-label="Custom receiver host and port">
+    </div>
+  </div>
+
+  <div class="keys">
+    <span><kbd>←</kbd> <kbd>→</kbd> tune</span>
+    <span><kbd>shift</kbd> ×10</span>
+    <span><kbd>alt</kbd> fine</span>
+    <span><kbd>↑</kbd> <kbd>↓</kbd> step</span>
+    <span><kbd>0–9</kbd> <kbd>enter</kbd> go to kHz</span>
+    <span><kbd>[</kbd> <kbd>]</kbd> band</span>
+    <span><kbd>M</kbd> mode</span>
+    <span><kbd>R</kbd> record</span>
+    <span><kbd>space</kbd> mute</span>
+    <span><kbd>P</kbd> power</span>
+  </div>
+</main>
+
+<script>
+'use strict';
+/* ---------- data ---------- */
+// Receivers: the station list from the SW Radio Max for Live device (public KiwiSDRs).
+const RX=[
+ ['UK · Wessex, SW England','wessex.zapto.org',8073],
+ ['Ireland · North West','irelandnorthwest.proxy.kiwisdr.com',8073],
+ ['France · F5LFE','www.f5lfe.fr',8073],
+ ['Netherlands · De Kiel (PA8AD)','pa8ad-1.proxy.kiwisdr.com',8073],
+ ['Germany · Filderstadt (DL2SBA)','dl2sba.ddns.net',8073],
+ ['Sweden · Siknas (SK2HG)','kiwisdr.sk2hg.se',8073],
+ ['Finland · Muurame (OH6HPS)','oh6hps.ddns.net',8073],
+ ['Norway · Trondheim (LA3WAA)','178.164.123.136',8073],
+ ['Iceland · Kopavogur (TF3GZ)','kop.utvarp.com',8073],
+ ['Spain · Navarra (EC2AQW)','21959.proxy.kiwisdr.com',8073],
+ ['Portugal · Lisbon (CS5SEL)','kiwi-hf.hamradio.isel.ipl.pt',8073],
+ ['Italy · IZ6198SWL','iz6198swl.proxy.kiwisdr.com',8073],
+ ['Czechia · Velvary (OL1F)','21684.proxy.kiwisdr.com',8073],
+ ['Hungary · HA2NA','194.36.182.122',8073],
+ ['Romania · Bucharest (YO3BN)','kiwisdr.yo3bn.ro',8073],
+ ['Greece · Nea Makri (SV1QJG)','kwhighpower.ddns.net',8073],
+ ['Cyprus · TWR Monitor','cyp.twrmon.net',8073],
+ ['Canary Islands · Fuerteventura','il38.ddns.net',8079],
+ ['South Africa · Centurion','kiwisdr.r7d.xyz',8073],
+ ['USA · Teaticket MA (KB1VWC)','kb1vwc.ddns.net',8073],
+ ['USA · Lubbock TX','data3.caprockweather.com',8073],
+ ['USA · KPH Inverness CA','kphsdr.com',8073],
+ ['USA · Anchorage AK (WL7NO)','wl7no.ddns.net',8073],
+ ['Hawaii · Kakaako','22329.proxy.kiwisdr.com',8073],
+ ['Canada · Prairies, Alberta','canadian-prairies-shortwave.ddns.net',8073],
+ ['Brazil · Pardinho','pardinho.websdr.com.br',8073],
+ ['Uruguay · Montevideo (CX8BIT)','cx8bit.proxy.kiwisdr.com',8073],
+ ['Chile · Santiago (CE3PBR)','ce3pbr.proxy.kiwisdr.com',8073],
+ ['Japan · Machida (JK1LOT)','jk1lot.ham-radio-op.net',8073],
+ ['Japan · Okegawa (JP1ODJ)','jp1odj.proxy.kiwisdr.com',8073],
+ ['Thailand · Cha-Am (LA6LU)','la6lukiwisdrth.ddns.net',8073],
+ ['Thailand · So Phisai (VE3HLS)','ve3hls.proxy.kiwisdr.com',8073],
+ ['Philippines · Negros (DX6RAN)','dx6ran.ddns.net',8073],
+ ['Indonesia · Sidoarjo (YB3TE)','yb3te.kenkom.net',8073],
+ ['Indonesia · Bogor (Opal)','opalindo.proxy.kiwisdr.com',8073],
+ ['Australia · Augusta (VK6QS)','vk6qs2.proxy.kiwisdr.com',8073],
+ ['New Zealand · ZL2J','zl2j.proxy.kiwisdr.com',8073]
+];
+// mode: [label, low cut Hz, high cut Hz] — KiwiSDR default passbands
+const MODES={am:['AM',-4900,4900],amn:['AM-N',-2500,2500],sam:['SAM',-4900,4900],lsb:['LSB',-2700,-300],
+             usb:['USB',300,2700],cw:['CW',300,700],nbfm:['FM',-6000,6000]};
+const BANDS=[['LW',153,279],['MW',531,1602],['120',2300,2495],['90',3200,3400],['75',3900,4000],['60',4750,5060],
+ ['49',5900,6200],['41',7200,7450],['31',9400,9900],['25',11600,12100],['22',13570,13870],['19',15100,15800],
+ ['16',17480,17900],['15',18900,19020],['13',21450,21850],['11',25670,26100]];
+const STEPS=[0.01,0.1,0.5,1,5,9,10];
+const ZOOMS=[[5,'940'],[6,'470'],[7,'235'],[8,'117'],[9,'59'],[10,'29'],[11,'15']]; // kHz across the dial
+const MEM0=[{label:'6000 kHz AM',freq:6000,mode:'am'},{label:'CNR1',freq:6112,mode:'am'},
+ {label:'World Christian Radio',freq:7275,mode:'am'},{label:'Guizhou PBS',freq:7275,mode:'am'},
+ {label:'7275 kHz AM',freq:7275,mode:'am'},{label:'659 kHz AM',freq:659,mode:'am'}];
+
+/* ---------- state ---------- */
+const $=id=>document.getElementById(id);
+const store={
+  get(k,d){try{const v=localStorage.getItem('sw1.'+k);return v==null?d:JSON.parse(v)}catch(e){return d}},
+  set(k,v){try{localStorage.setItem('sw1.'+k,JSON.stringify(v))}catch(e){}}
+};
+const qs=new URLSearchParams(location.search);
+// Optional secure relay (wss://…) for use from HTTPS pages: ?relay=wss://host/path — remembered once given.
+if(qs.get('relay')!=null)store.set('relay',qs.get('relay'));
+const RELAY=store.get('relay','');
+const S={
+  freq:store.get('freq',6070), mode:store.get('mode','am'), step:store.get('step',5), vol:store.get('vol',70),
+  zoom:store.get('zoom',8), rx:store.get('rx',0), custom:store.get('custom',''), pre:store.get('pre',10),
+  mem:store.get('mem',MEM0), mute:false
+};
+if(!MODES[S.mode])S.mode='am';
+let maxKHz=30000, foff=0, srcRate=12000, nomRate=12000, conn='off', power=false, entry=null;
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const r2=v=>Math.round(v*100)/100;
+
+/* ---------- audio output ---------- */
+// Ring buffer + drift handling, shared by the AudioWorklet and the ScriptProcessor fallback.
+const RING_SRC=`
+class Ring{
+  constructor(outRate){this.n=1<<17;this.m=this.n-1;this.b=new Float32Array(this.n);this.w=0;this.r=0;this.f=0;
+    this.out=outRate;this.src=outRate;this.play=false}
+  setRate(s){this.src=s}
+  clear(){this.w=this.r=0;this.f=0;this.play=false}
+  avail(){return (this.w-this.r)&this.m}
+  push(a){const b=this.b,m=this.m;let w=this.w;if(this.avail()+a.length>this.n-8){this.r=(w-((this.src*0.3)|0))&m}
+    for(let i=0;i<a.length;i++){b[w]=a[i];w=(w+1)&m}this.w=w}
+  pull(o){const n=o.length,b=this.b,m=this.m,tgt=this.src*0.3,ratio=this.src/this.out;let av=this.avail();
+    if(!this.play){if(av<tgt){o.fill(0);return}this.play=true}
+    if(av>tgt*5){this.r=(this.w-(tgt|0))&m;av=this.avail()}
+    if(Math.abs(ratio-1)<0.003){
+      if(av<n+2){o.fill(0);this.play=false;return}
+      let r=this.r;
+      if(av>tgt*1.6)r=(r+1)&m; else if(av<tgt*0.5)r=(r-1)&m;
+      for(let i=0;i<n;i++){o[i]=b[r];r=(r+1)&m}this.r=r;return}
+    const adj=1+Math.max(-1,Math.min(1,(av-tgt)/tgt))*0.005,inc=ratio*adj;
+    if(av<n*inc+4){o.fill(0);this.play=false;return}
+    let r=this.r,f=this.f;
+    for(let i=0;i<n;i++){const y0=b[(r-1)&m],y1=b[r],y2=b[(r+1)&m],y3=b[(r+2)&m];
+      const c1=0.5*(y2-y0),c2=y0-2.5*y1+2*y2-0.5*y3,c3=0.5*(y3-y0)+1.5*(y1-y2);
+      o[i]=((c3*f+c2)*f+c1)*f+y1;f+=inc;const k=f|0;f-=k;r=(r+k)&m}
+    this.r=r;this.f=f}
+}`;
+const WORKLET_SRC=RING_SRC+`
+class P extends AudioWorkletProcessor{
+  constructor(){super();this.ring=new Ring(sampleRate);
+    this.port.onmessage=e=>{const d=e.data;if(d.rate)this.ring.setRate(d.rate);else if(d.clear)this.ring.clear();else this.ring.push(d)}}
+  process(i,o){this.ring.pull(o[0][0]);return true}
+}
+registerProcessor('sw1',P);`;
+let ctx=null,gain=null,node=null,ring=null,audioReady=null;
+function audioStart(rate){
+  const want=Math.round(rate||12000);
+  if(ctx&&Math.abs(ctx.sampleRate-want)<=want*0.003){if(ctx.state!=='running')ctx.resume();return audioReady}
+  if(ctx){try{ctx.close()}catch(e){}ctx=null;node=null;ring=null}
+  const AC=window.AudioContext||window.webkitAudioContext;
+  try{ctx=new AC({sampleRate:want,latencyHint:'playback'})}catch(e){ctx=new AC()}
+  gain=ctx.createGain();gain.connect(ctx.destination);setVol();
+  ctx.resume&&ctx.resume();
+  const c=ctx;
+  audioReady=(async()=>{
+    if(c.audioWorklet){
+      try{
+        const url=URL.createObjectURL(new Blob([WORKLET_SRC],{type:'application/javascript'}));
+        await c.audioWorklet.addModule(url);
+        if(c!==ctx)return;
+        node=new AudioWorkletNode(c,'sw1',{numberOfInputs:0,numberOfOutputs:1,outputChannelCount:[1]});
+        node.connect(gain);node.port.postMessage({rate:srcRate});return;
+      }catch(e){}
+    }
+    if(c!==ctx)return;
+    const Ring=new Function(RING_SRC+';return Ring')();
+    ring=new Ring(c.sampleRate);ring.setRate(srcRate);
+    node=c.createScriptProcessor(2048,0,1);
+    node.onaudioprocess=e=>ring.pull(e.outputBuffer.getChannelData(0));
+    node.connect(gain);
+  })();
+  return audioReady;
+}
+function audioRate(r){if(ring)ring.setRate(r);else if(node&&node.port)node.port.postMessage({rate:r})}
+function audioClear(){if(ring)ring.clear();else if(node&&node.port)node.port.postMessage({clear:1})}
+function audioPush(f32){if(ring)ring.push(f32);else if(node&&node.port)node.port.postMessage(f32,[f32.buffer])}
+function setVol(){if(gain){const v=S.mute?0:S.vol/100;gain.gain.value=v*v*1.6}}
+// Browsers keep audio suspended until a gesture; any tap or key resumes it.
+['pointerdown','keydown'].forEach(t=>addEventListener(t,()=>{if(power&&ctx&&ctx.state==='suspended')ctx.resume()},true));
+
+/* ---------- KiwiSDR connection ---------- */
+let snd=null,wf=null,ka=0,connT=0,ts=0,gotAudio=false,limits='';
+const adpcm={i:0,p:0};
+const STEP_T=[7,8,9,10,11,12,13,14,16,17,19,21,23,25,28,31,34,37,41,45,50,55,60,66,73,80,88,97,107,118,130,143,157,173,190,209,230,253,279,307,337,371,408,449,494,544,598,658,724,796,876,963,1060,1166,1282,1411,1552,1707,1878,2066,2272,2499,2749,3024,3327,3660,4026,4428,4871,5358,5894,6484,7132,7845,8630,9493,10442,11487,12635,13899,15289,16818,18500,20350,22385,24623,27086,29794,32767];
+const IDX_T=[-1,-1,-1,-1,2,4,6,8,-1,-1,-1,-1,2,4,6,8];
+function adpcmOne(c){const st=STEP_T[adpcm.i];adpcm.i=clamp(adpcm.i+IDX_T[c],0,88);let d=st>>3;if(c&1)d+=st>>2;if(c&2)d+=st>>1;if(c&4)d+=st;if(c&8)d=-d;
+  adpcm.p=clamp(adpcm.p+d,-32768,32767);return adpcm.p}
+function rxTarget(){
+  if(S.rx==='custom'){const m=/^\s*(?:https?:\/\/|ws:\/\/)?([^\s:\/]+)(?::(\d+))?/.exec(S.custom||'');if(m)return [m[1],+(m[2]||8073),m[1]]}
+  const r=RX[+S.rx]||RX[0];return [r[1],r[2],r[0]];
+}
+function wsURL(kind){
+  const [h,p]=rxTarget(),path='/'+ts+'/'+kind;
+  return RELAY?RELAY.replace(/\/+$/,'')+'/'+h+'/'+p+path:'ws://'+h+':'+p+path;
+}
+function setStatus(html){$('status').innerHTML=html}
+function note(html){const n=$('note');n.innerHTML=html||'';n.style.display=html?'block':'none'}
+function closeSockets(){
+  clearInterval(ka);ka=0;clearTimeout(connT);connT=0;clearTimeout(tuneT);tuneT=0;clearTimeout(cfT);cfT=0;
+  const a=snd,b=wf;snd=wf=null;
+  for(const s of [a,b])if(s){s.onopen=s.onmessage=s.onclose=s.onerror=null;try{s.close()}catch(e){}}
+  wfRows.length=0;wfSeen=false;
+}
+function setPower(on,msg){
+  power=on;$('power').setAttribute('aria-pressed',on);
+  if(!on){if(rec.on)recStop();closeSockets();conn='off';audioClear();if(ctx&&ctx.state==='running')ctx.suspend();
+    setStatus(msg||'Off');rssi=-127;drawMeter();$('rec').disabled=true;dirty=true;return}
+  note('');audioStart(12000);connect();
+}
+function fail(msg){setPower(false,msg)}
+function connect(){
+  closeSockets();gotAudio=false;limits='';adpcm.i=adpcm.p=0;conn='connecting';$('rec').disabled=true;
+  ts=(Date.now()+Math.floor(Math.random()*1e5))%4294967296;
+  const name=rxTarget()[2];
+  setStatus('Connecting · '+esc(name));
+  let s;
+  try{s=new WebSocket(wsURL('SND'))}
+  catch(e){
+    if(location.protocol==='https:'&&!RELAY){
+      note('<b>This page is on HTTPS, and the receivers only speak plain HTTP</b>, so the browser is blocking the connection.<br>'+
+        'In Chrome on a computer: click the icon at the left of the address bar → <b>Site settings</b> → <b>Insecure content</b> → <b>Allow</b>, then reload this page. '+
+        'This is a one-time setting for this page only. Phones have no such setting and need a secure relay.');
+      fail('Blocked by browser');
+    }else fail('Could not connect');
+    return;
+  }
+  snd=s;s.binaryType='arraybuffer';
+  connT=setTimeout(()=>{if(s===snd&&!gotAudio)fail('No answer from '+esc(name)+' · try another receiver')},10000);
+  s.onopen=()=>s.send('SET auth t=kiwi p=');
+  s.onmessage=e=>{if(s===snd)onSnd(e.data)};
+  s.onclose=()=>{if(s!==snd)return;fail(gotAudio?'Receiver closed the connection'+(limits?' · '+limits:''):'Receiver unavailable · try another')};
+  s.onerror=()=>{};
+}
+const dec=new TextDecoder();
+function onMsg(text,isWf){
+  for(const pair of text.split(' ')){
+    const q=pair.indexOf('='),k=q<0?pair:pair.slice(0,q),v=q<0?'':pair.slice(q+1);
+    if(isWf){
+      if(k==='wf_setup'){wfSend('SET zoom='+S.zoom+' cf='+(S.freq-foff).toFixed(3));wfSend('SET maxdb=0 mindb=-100');
+        wfSend('SET wf_speed=3');wfSend('SET wf_comp=0');wfSend('SET interp=13');wfSend('SET ident_user=SW1%20web');wfSend('SET keepalive')}
+      continue;
+    }
+    switch(k){
+      case 'too_busy':fail('Receiver full ('+v+' listeners) · try another');return;
+      case 'down':fail('Receiver is down · try another');return;
+      case 'badp':if(v!=='0'){fail(v==='5'?'Already connected to this receiver from your network':'Receiver needs a password or is full · try another');return}break;
+      case 'redirect':fail('Receiver redirects elsewhere · try another');return;
+      case 'inactivity_timeout':fail('Receiver’s inactivity limit reached ('+v+' min)');return;
+      case 'ip_limit':fail('Receiver’s daily listening limit reached');return;
+      case 'exclusive_use':fail('Receiver is in exclusive use · try another');return;
+      case 'bandwidth':maxKHz=+v/1000||30000;break;
+      case 'freq_offset':foff=+v||0;break;
+      case 'audio_rate':nomRate=+v||12000;snd.send('SET AR OK in='+v+' out=44100');break;
+      case 'load_cfg':try{const c=JSON.parse(decodeURIComponent(v));const a=[];
+          if(c.inactivity_timeout_mins)a.push(c.inactivity_timeout_mins+' min inactivity limit');
+          if(c.ip_limit_mins)a.push(c.ip_limit_mins+' min per day');limits=a.join(', ')}catch(e){}break;
+      case 'sample_rate':
+        srcRate=+v||12000;
+        audioStart(srcRate).then(()=>audioRate(srcRate));
+        snd.send('SET squelch=0 max=0');snd.send('SET genattn=0');snd.send('SET gen=0 mix=-1');
+        snd.send('SET ident_user=SW1%20web');tuneNow();
+        snd.send('SET agc=1 hang=0 thresh=-100 slope=6 decay=1000 manGain=50');
+        snd.send('SET compression=0');snd.send('SET keepalive');
+        clearInterval(ka);ka=setInterval(()=>{for(const x of [snd,wf])if(x&&x.readyState===1)x.send('SET keepalive')},1000);
+        openWf();break;
+    }
+  }
+}
+function onSnd(buf){
+  const u=new Uint8Array(buf);if(u.length<4)return;
+  const tag=u[0]===77?'M':u[0]===83?'S':'';  // MSG / SND
+  if(tag==='M'){onMsg(dec.decode(u.subarray(4)),false);return}
+  if(tag!=='S'||u.length<10)return;
+  const flags=u[3],dv=new DataView(buf);
+  rssiNew(0.1*dv.getUint16(8,false)-127);
+  let pcm;
+  if(flags&0x10){const d=u.subarray(10);pcm=new Int16Array(d.length*2);
+    for(let i=0;i<d.length;i++){pcm[2*i]=adpcmOne(d[i]&15);pcm[2*i+1]=adpcmOne(d[i]>>4)}}
+  else{const n=(u.length-10)>>1,le=!!(flags&0x80);pcm=new Int16Array(n);for(let i=0;i<n;i++)pcm[i]=dv.getInt16(10+2*i,le)}
+  if(!pcm.length)return;
+  if(!gotAudio){gotAudio=true;conn='on';clearTimeout(connT);$('rec').disabled=false;showOn()}
+  recFeed(pcm);
+  const f=new Float32Array(pcm.length);for(let i=0;i<f.length;i++)f[i]=pcm[i]/32768;
+  audioPush(f);
+}
+function showOn(){setStatus('<b>On</b> · '+esc(rxTarget()[2])+(limits?' · '+limits:''))}
+let tuneT=0,cfT=0;
+function tuneNow(){
+  if(!snd||snd.readyState!==1)return;
+  const m=MODES[S.mode];
+  snd.send('SET mod='+S.mode+' low_cut='+m[1]+' high_cut='+m[2]+' freq='+(S.freq-foff).toFixed(3));
+  if(!cfT)cfT=setTimeout(()=>{cfT=0;wfSend('SET zoom='+S.zoom+' cf='+(S.freq-foff).toFixed(3))},140);
+}
+/* waterfall / spectrum stream (only some receiver channels offer it) */
+const WFROWS=56,wfRows=[];let wfSeen=false,wfFloor=-110,wfLine=null,wfLineMeta=null;
+const wfC=document.createElement('canvas');wfC.width=1024;wfC.height=WFROWS;const wfX=wfC.getContext('2d');
+const wfImg=wfX.createImageData(1024,1);
+function wfSend(m){if(wf&&wf.readyState===1)wf.send(m)}
+function openWf(){
+  let s;try{s=new WebSocket(wsURL('W/F'))}catch(e){return}
+  wf=s;s.binaryType='arraybuffer';
+  s.onopen=()=>s.send('SET auth t=kiwi p=');
+  s.onmessage=e=>{if(s===wf)onWf(e.data)};
+  s.onclose=s.onerror=()=>{};
+}
+function onWf(buf){
+  const u=new Uint8Array(buf);if(u.length<4)return;
+  if(u[0]===77){onMsg(dec.decode(u.subarray(4)),true);return}
+  if(u[0]!==87||u.length<16+64)return;  // 'W/F'
+  const dv=new DataView(buf),xbin=dv.getUint32(4,true),zoom=dv.getUint32(8,true)&0xffff,d=u.subarray(16),n=Math.min(1024,d.length);
+  const span=maxKHz/Math.pow(2,zoom),start=xbin/(1024*16384)*maxKHz+foff;
+  // noise floor: 15th percentile, smoothed
+  const hist=new Uint16Array(256);for(let i=0;i<n;i++)hist[d[i]]++;
+  let acc=0,p=0;for(;p<256;p++){acc+=hist[p];if(acc>n*0.15)break}
+  const fl=p-255;wfFloor=wfSeen?wfFloor+(fl-wfFloor)*0.1:fl;wfSeen=true;
+  const px=wfImg.data;
+  for(let i=0;i<1024;i++){const db=(i<n?d[i]:0)-255,v=clamp((db-wfFloor-2)/52,0,1),g=Math.round(Math.pow(v,0.8)*245);
+    px[4*i]=px[4*i+1]=px[4*i+2]=g;px[4*i+3]=255}
+  wfX.drawImage(wfC,0,1);wfX.putImageData(wfImg,0,0);
+  wfRows.unshift({start,span});if(wfRows.length>WFROWS)wfRows.length=WFROWS;
+  if(!wfLine||wfLine.length!==n)wfLine=new Float32Array(n).fill(-255);
+  const same=wfLineMeta&&wfLineMeta.start===start&&wfLineMeta.span===span;
+  for(let i=0;i<n;i++){const db=d[i]-255;wfLine[i]=same?wfLine[i]+(db-wfLine[i])*0.45:db}
+  wfLineMeta={start,span};dirty=true;
+}
+
+/* ---------- S-meter ---------- */
+let rssi=-127,meterT=0;
+function rssiNew(v){rssi+= (v-rssi)*(v>rssi?0.5:0.12);if(!meterT)meterT=setTimeout(()=>{meterT=0;drawMeter()},100)}
+const mpos=db=>clamp((db+127)/94,0,1);  // -127 dBm (S0) … -33 dBm (S9+40)
+function drawMeter(){
+  $('mfill').style.width=(mpos(rssi)*100).toFixed(1)+'%';
+  if(conn!=='on'){$('mread').innerHTML='&nbsp;';return}
+  const su=(rssi+127)/6;
+  $('mread').textContent=(su<=9?'S'+Math.max(0,Math.round(su)):'S9+'+Math.round(rssi+73))+' · '+Math.round(rssi)+' dBm';
+}
+(function(){const t=$('mtrack');[[1,'1'],[3,'3'],[5,'5'],[7,'7'],[9,'9']].forEach(([s,l])=>tick(-127+6*s,l));tick(-53,'+20');tick(-33.5,'+40');
+  function tick(db,l){const e=document.createElement('span');e.className='mtick';e.style.left=(mpos(db)*100)+'%';e.textContent=l;t.appendChild(e)}})();
+
+/* ---------- tuning ---------- */
+function setFreq(f,opt){
+  f=clamp(r2(f),0,maxKHz+foff);
+  if(f===S.freq&&!opt)return;
+  S.freq=f;store.set('freq',f);showFreq();dirty=true;
+  if(conn==='on'&&!tuneT)tuneT=setTimeout(()=>{tuneT=0;tuneNow()},20);
+}
+function stepBy(dir,size,grid){
+  // a plain step snaps to the step grid first; a ×10 jump (grid given) keeps the offset
+  if(grid){setFreq(S.freq+dir*size);return}
+  const g=S.freq/size,on=Math.abs(g-Math.round(g))<1e-6;
+  setFreq(on?S.freq+dir*size:(dir>0?Math.ceil(g):Math.floor(g))*size);
+}
+function setMode(m){S.mode=m;store.set('mode',m);pressed('modes',m);$('dmode').textContent=MODES[m][0];dirty=true;if(conn==='on')tuneNow()}
+function setStep(s){S.step=s;store.set('step',s);pressed('steps',String(s))}
+function setZoom(z){S.zoom=z;store.set('zoom',z);pressed('zooms',String(z));dirty=true;wfSend('SET zoom='+z+' cf='+(S.freq-foff).toFixed(3))}
+function bandOf(f){return BANDS.findIndex(b=>f>=b[1]&&f<=b[2])}
+const bandLast=store.get('bandLast',{});
+function showFreq(){
+  const el=$('freq');
+  if(entry!=null){el.className='freq entry';el.innerHTML=esc(entry)+'<span class="cur">&nbsp;</span><small>kHz · enter</small>';return}
+  const s=S.freq.toFixed(2),i=s.indexOf('.'),whole=s.slice(0,i).replace(/\B(?=(\d{3})+$)/g,'\u2009');
+  el.className='freq';el.innerHTML=whole+'<span style="opacity:.55">'+s.slice(i)+'</span><small>kHz</small>';
+  const b=bandOf(S.freq);
+  $('dband').textContent=b<0?'\u00a0':(b<2?BANDS[b][0]:BANDS[b][0]+' m band');
+  pressed('bands',b<0?'':String(b));
+  if(b>=0){bandLast[b]=S.freq;store.set('bandLast',bandLast)}
+}
+function gotoBand(i){i=(i+BANDS.length)%BANDS.length;const b=BANDS[i];const f=bandLast[i];
+  setFreq(f>=b[1]&&f<=b[2]?f:b[1]);if(i<2&&S.step!==9&&S.step!==10)setStep(9)}
+
+/* ---------- dial canvas ---------- */
+const cv=$('dial'),cx=cv.getContext('2d');let dirty=true,W=0,H=0;
+function resize(){const r=cv.getBoundingClientRect(),d=Math.min(2,window.devicePixelRatio||1);W=r.width;H=r.height;
+  cv.width=Math.round(W*d);cv.height=Math.round(H*d);cx.setTransform(d,0,0,d,0,0);dirty=true}
+addEventListener('resize',resize);
+const spanKHz=()=>maxKHz/Math.pow(2,S.zoom);
+function draw(){
+  requestAnimationFrame(draw);
+  if(!dirty||!W)return;dirty=false;
+  const span=spanKHz(),f0=S.freq-span/2,x=f=>(f-f0)/span*W;
+  const top=26,specH=Math.round((H-top)*0.56),wy=top+specH,wh=H-wy;
+  cx.fillStyle='#0e0e0e';cx.fillRect(0,0,W,H);
+  // waterfall
+  if(wfRows.length){cx.imageSmoothingEnabled=false;const rh=wh/WFROWS;
+    for(let j=0;j<wfRows.length;j++){const r=wfRows[j];cx.drawImage(wfC,0,j,1024,1,x(r.start),wy+j*rh,r.span/span*W,rh+0.6)}}
+  // passband
+  const m=MODES[S.mode],px0=x(S.freq+m[1]/1000),px1=x(S.freq+m[2]/1000);
+  cx.fillStyle='rgba(255,255,255,.10)';cx.fillRect(px0,top,Math.max(1,px1-px0),H-top);
+  // spectrum line
+  if(wfLine&&wfLineMeta&&wfRows.length){
+    const n=wfLine.length,lo=wfFloor-6,rng=66;cx.beginPath();
+    for(let i=0;i<n;i++){const xx=x(wfLineMeta.start+(i+0.5)/n*wfLineMeta.span),yy=wy-2-clamp((wfLine[i]-lo)/rng,0,1)*(specH-8);
+      i?cx.lineTo(xx,yy):cx.moveTo(xx,yy)}
+    cx.strokeStyle='#f1f0ec';cx.lineWidth=1;cx.stroke();
+  }else{
+    cx.fillStyle='#5d5b57';cx.font='11px '+FONT;cx.textAlign='center';
+    cx.fillText(conn==='on'?'No spectrum on this receiver channel':conn==='connecting'?'Connecting':'',W/2,top+specH/2);
+  }
+  // scale
+  const steps=[0.1,0.5,1,5,10,50,100,500,1000];let maj=steps.find(s=>s/span*W>=64)||1000;
+  const minr=maj/5;cx.strokeStyle='#6a6863';cx.fillStyle='#a3a19b';cx.lineWidth=1;cx.font='10px '+FONT;cx.textAlign='center';
+  cx.beginPath();
+  for(let f=Math.ceil(f0/minr)*minr;f<=f0+span;f+=minr){const xx=Math.round(x(f))+0.5,isMaj=Math.abs(f/maj-Math.round(f/maj))<1e-6;
+    cx.moveTo(xx,top);cx.lineTo(xx,top-(isMaj?9:4));
+    if(isMaj&&f>=0)cx.fillText(maj<1?f.toFixed(1):String(Math.round(f)),xx,11)}
+  cx.moveTo(0,top+0.5);cx.lineTo(W,top+0.5);cx.stroke();
+  // needle
+  const nx=Math.round(W/2)+0.5;cx.strokeStyle='#fff';cx.lineWidth=1;cx.beginPath();cx.moveTo(nx,top-12);cx.lineTo(nx,H);cx.stroke();
+  cx.fillStyle='#fff';cx.beginPath();cx.moveTo(nx-5,top-13);cx.lineTo(nx+5,top-13);cx.lineTo(nx,top-6);cx.fill();
+}
+const FONT='"Helvetica Neue",Helvetica,Arial,sans-serif';
+// drag to scrub, click to tune, wheel to step
+(function(){
+  let down=null;
+  cv.addEventListener('pointerdown',e=>{cv.setPointerCapture(e.pointerId);down={x:e.clientX,f:S.freq,moved:false}});
+  cv.addEventListener('pointermove',e=>{if(!down)return;const dx=e.clientX-down.x;if(Math.abs(dx)>3)down.moved=true;
+    if(down.moved){const g=Math.min(S.step,1);setFreq(Math.round((down.f-dx*spanKHz()/W)/g)*g)}});
+  const up=e=>{if(!down)return;if(!down.moved){const r=cv.getBoundingClientRect(),g=S.step;
+      setFreq(Math.round((S.freq+((e.clientX-r.left)/W-0.5)*spanKHz())/g)*g)}down=null};
+  cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',()=>down=null);
+  let acc=0;
+  cv.addEventListener('wheel',e=>{e.preventDefault();acc+=(Math.abs(e.deltaX)>Math.abs(e.deltaY)?e.deltaX:-e.deltaY);
+    while(Math.abs(acc)>=24){const d=Math.sign(acc);acc-=d*24;e.shiftKey?stepBy(d,S.step*10,true):stepBy(d,S.step)}},{passive:false});
+})();
+// rotary knob: 12° per step
+(function(){
+  const k=$('knob');let last=null,acc=0,rot=0;
+  const ang=e=>{const r=k.getBoundingClientRect();return Math.atan2(e.clientY-r.top-r.height/2,e.clientX-r.left-r.width/2)*180/Math.PI};
+  k.addEventListener('pointerdown',e=>{k.setPointerCapture(e.pointerId);last=ang(e);acc=0});
+  k.addEventListener('pointermove',e=>{if(last==null)return;const a=ang(e);let d=a-last;if(d>180)d-=360;if(d<-180)d+=360;last=a;
+    rot+=d;acc+=d;k.style.transform='rotate('+rot+'deg)';
+    while(Math.abs(acc)>=12){const s=Math.sign(acc);acc-=s*12;stepBy(s,S.step)}});
+  const end=()=>last=null;k.addEventListener('pointerup',end);k.addEventListener('pointercancel',end);
+  k.addEventListener('wheel',e=>{e.preventDefault();const s=e.deltaY<0?1:-1;rot+=s*12;k.style.transform='rotate('+rot+'deg)';stepBy(s,S.step)},{passive:false});
+})();
+
+/* ---------- recorder ---------- */
+const rec={on:false,chunks:[],n:0,pre:[],preN:0,meta:null,timer:0},recs=[];
+function recFeed(pcm){
+  if(rec.on){rec.chunks.push(pcm);rec.n+=pcm.length;if(rec.n>srcRate*7200)recStop()}
+  rec.pre.push(pcm);rec.preN+=pcm.length;
+  const max=S.pre*srcRate;while(rec.pre.length&&rec.preN-rec.pre[0].length>=max)rec.preN-=rec.pre.shift().length;
+}
+function recStart(){
+  if(conn!=='on'||rec.on)return;
+  rec.chunks=S.pre>0?rec.pre.slice():[];rec.n=rec.chunks.reduce((a,c)=>a+c.length,0);
+  rec.meta={freq:S.freq,mode:S.mode,rate:Math.abs(nomRate-srcRate)<nomRate*0.002?nomRate:Math.round(srcRate),when:new Date(Date.now()-rec.n/srcRate*1000)};
+  rec.on=true;$('rec').setAttribute('aria-pressed','true');$('rtime').classList.add('on');
+  rec.timer=setInterval(recTime,250);recTime();
+}
+const mmss=s=>{s=Math.floor(s);return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0')};
+function recTime(){$('rtime').textContent=mmss(rec.n/rec.meta.rate)}
+function wavBlob(chunks,n,rate){
+  const b=new ArrayBuffer(44+n*2),v=new DataView(b),w=(o,s)=>{for(let i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i))};
+  w(0,'RIFF');v.setUint32(4,36+n*2,true);w(8,'WAVE');w(12,'fmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);
+  v.setUint32(24,rate,true);v.setUint32(28,rate*2,true);v.setUint16(32,2,true);v.setUint16(34,16,true);w(36,'data');v.setUint32(40,n*2,true);
+  const out=new Int16Array(b,44,n);let o=0;for(const c of chunks){out.set(c,o);o+=c.length}  // host byte order is little-endian on all current platforms
+  return new Blob([b],{type:'audio/wav'});
+}
+function recStop(){
+  if(!rec.on)return;rec.on=false;clearInterval(rec.timer);
+  $('rec').setAttribute('aria-pressed','false');$('rtime').classList.remove('on');$('rtime').textContent='00:00';
+  const m=rec.meta,n=rec.n,chunks=rec.chunks;rec.chunks=[];rec.n=0;
+  if(n<m.rate*0.2)return;
+  const d=m.when,p=x=>String(x).padStart(2,'0');
+  const stamp=d.getUTCFullYear()+p(d.getUTCMonth()+1)+p(d.getUTCDate())+'-'+p(d.getUTCHours())+p(d.getUTCMinutes())+p(d.getUTCSeconds())+'Z';
+  const blob=wavBlob(chunks,n,m.rate);
+  recs.unshift({name:'SW1_'+m.freq.toFixed(2)+'kHz_'+MODES[m.mode][0]+'_'+stamp+'.wav',url:URL.createObjectURL(blob),dur:n/m.rate,size:blob.size,saved:false});
+  drawRecs();
+}
+let player=null;
+function drawRecs(){
+  const ul=$('recs');ul.textContent='';$('recempty').style.display=recs.length?'none':'block';
+  recs.forEach((r,i)=>{
+    const li=document.createElement('li');
+    li.innerHTML='<span class="nm"></span><span class="dm">'+mmss(r.dur)+' · '+(r.size/1048576).toFixed(1)+' MB</span>'+
+      '<button class="btn" data-a="play">Play</button><a class="btn" data-a="save">Save</a><button class="btn" data-a="del" aria-label="Delete">×</button>';
+    li.querySelector('.nm').textContent=r.name;
+    const a=li.querySelector('a');a.href=r.url;a.download=r.name;a.textContent=r.saved?'Saved':'Save';
+    a.addEventListener('click',()=>{r.saved=true;a.textContent='Saved'});
+    li.querySelector('[data-a=play]').addEventListener('click',ev=>{
+      if(player){player.pause();const was=player._i;player=null;drawRecs();if(was===i)return}
+      player=new Audio(r.url);player._i=i;player.onended=()=>{player=null;drawRecs()};player.play();ev.target.textContent='Stop'});
+    if(player&&player._i===i)li.querySelector('[data-a=play]').textContent='Stop';
+    li.querySelector('[data-a=del]').addEventListener('click',()=>{if(player){player.pause();player=null}URL.revokeObjectURL(r.url);recs.splice(i,1);drawRecs()});
+    ul.appendChild(li);
+  });
+}
+addEventListener('beforeunload',e=>{if(rec.on||recs.some(r=>!r.saved)){e.preventDefault();e.returnValue=''}});
+
+/* ---------- memory ---------- */
+function drawMems(){
+  const box=$('mems');box.textContent='';
+  S.mem.forEach((m,i)=>{
+    const c=document.createElement('span');c.className='chip';
+    const b=document.createElement('button');b.textContent=m.label;b.title=m.freq+' kHz '+(MODES[m.mode]||MODES.am)[0];
+    b.addEventListener('click',()=>{if(MODES[m.mode])setMode(m.mode);setFreq(m.freq)});
+    const x=document.createElement('button');x.className='x';x.textContent='×';x.setAttribute('aria-label','Remove '+m.label);
+    x.addEventListener('click',()=>{S.mem.splice(i,1);store.set('mem',S.mem);drawMems()});
+    c.append(b,x);box.appendChild(c);
+  });
+}
+function memAdd(){
+  const label=$('memname').value.trim()||(S.freq+' kHz '+MODES[S.mode][0]);
+  S.mem.push({label,freq:S.freq,mode:S.mode});store.set('mem',S.mem);$('memname').value='';drawMems();
+}
+
+/* ---------- controls ---------- */
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function seg(id,items,cur,fn){const box=$(id);items.forEach(([val,label])=>{const b=document.createElement('button');b.textContent=label;b.dataset.v=val;
+  b.setAttribute('aria-pressed',String(val)===String(cur));b.addEventListener('click',()=>fn(val));box.appendChild(b)})}
+function pressed(id,val){for(const b of $(id).children)b.setAttribute('aria-pressed',b.dataset.v===val)}
+seg('steps',STEPS.map(s=>[s,String(s)]),S.step,v=>setStep(+v));
+seg('modes',Object.keys(MODES).map(k=>[k,MODES[k][0]]),S.mode,setMode);
+seg('bands',BANDS.map((b,i)=>[i,b[0]]),-1,v=>gotoBand(+v));
+seg('zooms',ZOOMS,S.zoom,v=>setZoom(+v));
+$('vol').value=S.vol;$('vol').addEventListener('input',e=>{S.vol=+e.target.value;S.mute=false;store.set('vol',S.vol);setVol()});
+$('pre').value=String(S.pre);$('pre').addEventListener('change',e=>{S.pre=+e.target.value;store.set('pre',S.pre)});
+$('power').addEventListener('click',()=>setPower(!power));
+$('rec').addEventListener('click',()=>rec.on?recStop():recStart());
+$('memadd').addEventListener('click',memAdd);
+$('memname').addEventListener('keydown',e=>{if(e.key==='Enter')memAdd()});
+(function(){
+  const sel=$('rxsel');RX.forEach((r,i)=>sel.add(new Option(r[0],i)));sel.add(new Option('Custom…','custom'));
+  sel.value=String(S.rx);if(sel.selectedIndex<0){sel.value='0';S.rx=0}
+  $('rxcustom').value=S.custom;
+  const go=()=>{store.set('rx',S.rx);store.set('custom',S.custom);if(power){if(rec.on)recStop();audioClear();connect()}};
+  sel.addEventListener('change',()=>{S.rx=sel.value==='custom'?'custom':+sel.value;if(S.rx==='custom'&&!S.custom){$('rxcustom').focus();return}go()});
+  $('rxcustom').addEventListener('change',e=>{S.custom=e.target.value.trim();if(S.custom){S.rx='custom';sel.value='custom';go()}});
+})();
+
+/* ---------- keyboard ---------- */
+addEventListener('keydown',e=>{
+  const t=e.target,typing=t.tagName==='INPUT'&&t.type!=='range'||t.tagName==='SELECT';
+  if(typing||e.metaKey||e.ctrlKey)return;
+  const k=e.key;
+  if(entry!=null){
+    if(k==='Enter'){let v=parseFloat(entry);entry=null;if(isFinite(v)){if(v<30)v*=1000;setFreq(v,true)}showFreq();e.preventDefault();return}
+    if(k==='Escape'){entry=null;showFreq();return}
+    if(k==='Backspace'){entry=entry.slice(0,-1);if(!entry)entry=null;showFreq();e.preventDefault();return}
+  }
+  if(/^[0-9.]$/.test(k)){if(entry==null)entry='';if(entry.length<9&&!(k==='.'&&entry.includes('.')))entry+=k;showFreq();e.preventDefault();return}
+  const fine=S.step<=0.1?0.01:0.1;
+  switch(k){
+    case 'ArrowRight':case 'ArrowLeft':{const d=k==='ArrowRight'?1:-1;e.shiftKey&&!e.altKey?stepBy(d,S.step*10,true):stepBy(d,e.altKey?fine:S.step);break}
+    case 'ArrowUp':case 'ArrowDown':{const i=clamp(STEPS.indexOf(S.step)+(k==='ArrowUp'?1:-1),0,STEPS.length-1);setStep(STEPS[i]);break}
+    case '[':case ']':{const b=bandOf(S.freq),d=k===']'?1:-1;
+      gotoBand(b>=0?b+d:(d>0?BANDS.findIndex(x=>x[1]>S.freq):BANDS.map(x=>x[2]<S.freq).lastIndexOf(true)));break}
+    case 'm':case 'M':{const ks=Object.keys(MODES);setMode(ks[(ks.indexOf(S.mode)+1)%ks.length]);break}
+    case 'r':case 'R':rec.on?recStop():recStart();break;
+    case 'p':case 'P':setPower(!power);break;
+    case ' ':S.mute=!S.mute;setVol();setStatus(conn==='on'?(S.mute?'<b>Muted</b> · '+esc(rxTarget()[2]):''):$('status').innerHTML);if(conn==='on'&&!S.mute)showOn();break;
+    default:return;
+  }
+  e.preventDefault();
+});
+
+/* ---------- start ---------- */
+setInterval(()=>{const d=new Date(),p=x=>String(x).padStart(2,'0');$('utc').textContent=p(d.getUTCHours())+':'+p(d.getUTCMinutes())+':'+p(d.getUTCSeconds())+' UTC'},1000);
+$('dmode').textContent=MODES[S.mode][0];
+showFreq();drawMems();drawRecs();drawMeter();resize();requestAnimationFrame(draw);
+</script>
+</body>
+</html>
