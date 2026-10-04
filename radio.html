@@ -82,6 +82,24 @@ button{cursor:pointer;-webkit-tap-highlight-color:transparent}
 .seg button:hover{background:#e8e5df}
 .seg button[aria-pressed=true]{background:var(--ink);border-color:var(--ink);color:#fff;position:relative;z-index:1}
 .pair{display:grid;grid-template-columns:1fr auto;gap:22px 30px;align-items:end}
+/* passband: two sliders meeting under the needle; left = below, right = above */
+.pb{grid-column:1/-1;display:flex;flex-direction:column;gap:5px}
+.pbh{display:flex;align-items:center;gap:14px}
+.pbh .sp{flex:1}
+.pbh button{background:none;border:0;padding:2px 0;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--mid)}
+.pbh button:hover{color:var(--ink)}
+.pbh button[aria-pressed=true]{color:var(--ink);box-shadow:0 1px 0 var(--ink)}
+.pbs{display:grid;grid-template-columns:3.2em 1fr 9px 1fr 3.2em;align-items:center}
+.pbs output{font-variant-numeric:tabular-nums;font-size:12px}
+.pbs output:last-child{text-align:right}
+.pbs i{width:1px;height:16px;background:var(--ink);justify-self:center}
+.pbs input{--v:0}
+.pbs input[type=range]::-webkit-slider-runnable-track{background:linear-gradient(to right,var(--ink) calc(var(--v)*100%),var(--faint) 0)}
+.pbs input[type=range]::-moz-range-track{background:linear-gradient(to right,var(--ink) calc(var(--v)*100%),var(--faint) 0)}
+.pbs input.lo{direction:rtl}
+.pbs input.lo::-webkit-slider-runnable-track{background:linear-gradient(to left,var(--ink) calc(var(--v)*100%),var(--faint) 0)}
+.pbs input.lo::-moz-range-track{background:linear-gradient(to left,var(--ink) calc(var(--v)*100%),var(--faint) 0)}
+.pbs input:disabled{opacity:.3}
 input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:22px;background:transparent}
 input[type=range]::-webkit-slider-runnable-track{height:3px;background:var(--faint)}
 input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:var(--ink);margin-top:-7.5px}
@@ -170,6 +188,11 @@ kbd{font:inherit;border:1px solid var(--faint);border-radius:3px;padding:0 5px;c
   <div class="note" id="note"></div>
 
   <div class="ctl">
+    <div class="pb">
+      <div class="pbh"><span class="lab">passband · kHz</span><span class="sp"></span>
+        <button id="pblink" aria-pressed="true" title="Move both sides together">link</button><button id="pbreset" title="Back to this mode's normal width">reset</button></div>
+      <div class="pbs"><output id="pblov"></output><input class="lo" type="range" id="pblo" aria-label="Passband below the needle, kHz"><i></i><input type="range" id="pbhi" aria-label="Passband above the needle, kHz"><output id="pbhiv"></output></div>
+    </div>
     <div class="knobwrap">
       <div class="knob" id="knob" role="slider" aria-label="Tuning" tabindex="0"><b></b></div>
       <span class="lab">tuning</span>
@@ -299,6 +322,18 @@ const S={
   mem:store.get('mem',MEM0), mute:false
 };
 if(!MODES[S.mode])S.mode='am';
+// Passband per mode as [below, above] the needle in kHz. kind: 's' both sides of the carrier, 'u'/'l' one side (SSB), 'c' around the 500 Hz CW tone.
+const PB0={am:[4.9,4.9],amn:[2.5,2.5],sam:[4.9,4.9],nbfm:[6,6],usb:[0,2.7],lsb:[2.7,0],cw:[0.2,0.2]};
+const PBK={am:'s',amn:'s',sam:'s',nbfm:'s',usb:'u',lsb:'l',cw:'c'};
+// slider ranges per kind: [min, max below, max above, step]
+const PBR={s:[0,6,6,0.1],u:[0.5,0,6,0.1],l:[0.5,6,0,0.1],c:[0.05,0.4,1.5,0.05]};
+S.pb=Object.assign({},PB0,store.get('pb',{}));S.pblink=store.get('pblink',true);
+for(const k in PB0)S.pb[k]=Array.isArray(S.pb[k])&&S.pb[k].length===2?S.pb[k].map(Number):PB0[k].slice();  // own copies, never PB0's arrays
+// low and high cut in Hz relative to the carrier the receiver is given
+function cuts(mode){
+  const m=mode||S.mode,[b,a]=S.pb[m],k=PBK[m];
+  return k==='s'?[-Math.round(b*1000),Math.round(a*1000)]:k==='u'?[300,Math.round(a*1000)]:k==='l'?[-Math.round(b*1000),-300]:[Math.round(500-b*1000),Math.round(500+a*1000)];
+}
 let maxKHz=30000, foff=0, srcRate=12000, nomRate=12000, conn='off', power=false, entry=null;
 const clamp=(v,a,b)=>v<a?a:v>b?b:v;
 const r2=v=>Math.round(v*100)/100;
@@ -482,11 +517,11 @@ function onSnd(buf){
 }
 function showOn(){setStatus('<b>On</b> · '+esc(rxTarget()[2])+(limits?' · '+limits:''))}
 let tuneT=0,cfT=0;
-const cwOff=()=>S.mode==='cw'?(MODES.cw[1]+MODES.cw[2])/2000:0;  // kHz
+const cwOff=()=>S.mode==='cw'?0.5:0;  // kHz: the CW tone sits at 500 Hz
 function tuneNow(){
   if(!snd||snd.readyState!==1)return;
-  const m=MODES[S.mode];
-  snd.send('SET mod='+S.mode+' low_cut='+m[1]+' high_cut='+m[2]+' freq='+(S.freq-foff-cwOff()).toFixed(3));
+  const m=cuts();
+  snd.send('SET mod='+S.mode+' low_cut='+m[0]+' high_cut='+m[1]+' freq='+(S.freq-foff-cwOff()).toFixed(3));
   if(!cfT)cfT=setTimeout(()=>{cfT=0;wfSend('SET zoom='+S.zoom+' cf='+(S.freq-foff).toFixed(3))},140);
 }
 /* waterfall / spectrum stream (only some receiver channels offer it) */
@@ -533,14 +568,11 @@ function fAgo(ms){const t=performance.now()-ms;for(let i=fHist.length-1;i>=0;i--
 function audioWf(){
   if(conn!=='on'||wfReal||!an||!ctx||ctx.state!=='running'||performance.now()-audioSince<2500)return;
   an.getFloatFrequencyData(anBuf);
-  const m=MODES[S.mode],one=m[1]*m[2]>0,lo=one?Math.min(Math.abs(m[1]),Math.abs(m[2])):0,hi=Math.max(Math.abs(m[1]),Math.abs(m[2]));
-  const hzBin=ctx.sampleRate/an.fftSize,last=anBuf.length-1,f=fAgo(350);  // the audio heard now was tuned about 0.35 s ago
-  for(let i=0;i<1024;i++){const t=(i+0.5)/1024,hz=!one?Math.abs(2*t-1)*hi:m[1]<0?hi-t*(hi-lo):lo+t*(hi-lo);
+  const [lc,hc]=cuts(),hzBin=ctx.sampleRate/an.fftSize,last=anBuf.length-1,f=fAgo(350);  // the audio heard now was tuned about 0.35 s ago
+  for(let i=0;i<1024;i++){const hz=Math.abs(lc+(i+0.5)/1024*(hc-lc));
     const b=Math.min(last,hz/hzBin),b0=b|0,db=anBuf[b0]+(anBuf[Math.min(last,b0+1)]-anBuf[b0])*(b-b0);
     afRow[i]=clamp(Math.round((isFinite(db)?db:-200)+255),0,255)}
-  if(!one)wfPush(f-hi/1000,2*hi/1000,afRow);
-  else if(m[1]<0)wfPush(f-hi/1000,(hi-lo)/1000,afRow);
-  else wfPush(f-cwOff()+lo/1000,(hi-lo)/1000,afRow);
+  wfPush(f-cwOff()+lc/1000,(hc-lc)/1000,afRow);
 }
 
 /* ---------- S-meter ---------- */
@@ -572,7 +604,25 @@ function stepBy(dir,size,grid){
   setFreq(on?S.freq+dir*size:(dir>0?Math.ceil(g):Math.floor(g))*size);
 }
 function setMode(m){S.mode=m;store.set('mode',m);pressed('modes',m);$('dmode').textContent=MODES[m][0];dirty=true;
-  document.querySelector('.rx').classList.toggle('cwon',m==='cw');cwReset();if(conn==='on')tuneNow()}
+  document.querySelector('.rx').classList.toggle('cwon',m==='cw');cwReset();pbShow();if(conn==='on')tuneNow()}
+/* passband sliders */
+function pbShow(){
+  const k=PBK[S.mode],[mn,mxb,mxa,st]=PBR[k],[b,a]=S.pb[S.mode],lo=$('pblo'),hi=$('pbhi');
+  for(const [el,mx,v] of [[lo,mxb,b],[hi,mxa,a]]){el.disabled=!mx;el.min=0;el.max=mx||1;el.step=st;el.value=mx?v:0;el.style.setProperty('--v',mx?v/mx:0)}
+  const fmt=v=>st<0.1?v.toFixed(2):v.toFixed(1);
+  $('pblov').textContent=mxb?fmt(b):'';$('pbhiv').textContent=mxa?fmt(a):'';
+  $('pblink').style.visibility=mxb&&mxa?'visible':'hidden';$('pblink').setAttribute('aria-pressed',!!S.pblink);
+}
+let pbT=0;
+function pbSet(side,val){
+  const k=PBK[S.mode],[mn,mxb,mxa,st]=PBR[k],pb=S.pb[S.mode],mx=[mxb,mxa],q=v=>Math.round(v/st)*st;
+  const low=k==='s'?0:mn;  // AM-type modes may close one side completely
+  pb[side]=clamp(q(val),low,mx[side]);
+  if(S.pblink&&mxb&&mxa)pb[1-side]=clamp(pb[side],low,mx[1-side]);
+  if(k==='s'&&pb[0]+pb[1]<0.3)pb[1-side]=q(0.3-pb[side]);  // never fully closed
+  store.set('pb',S.pb);pbShow();dirty=true;
+  if(conn==='on'&&!pbT)pbT=setTimeout(()=>{pbT=0;tuneNow()},40);
+}
 function setStep(s){S.step=s;store.set('step',s);pressed('steps',String(s))}
 function setZoom(z){S.zoom=z;store.set('zoom',z);pressed('zooms',String(z));dirty=true;wfSend('SET zoom='+z+' cf='+(S.freq-foff).toFixed(3))}
 function bandOf(f){return BANDS.findIndex(b=>f>=b[1]&&f<=b[2])}
@@ -606,7 +656,7 @@ function draw(){
   if(wfRows.length){cx.imageSmoothingEnabled=false;const rh=wh/WFROWS;
     for(let j=0;j<wfRows.length;j++){const r=wfRows[j];cx.drawImage(wfC,0,j,1024,1,x(r.start),wy+j*rh,r.span/span*W,rh+0.6)}}
   // passband
-  const m=MODES[S.mode],co=cwOff(),px0=x(S.freq-co+m[1]/1000),px1=x(S.freq-co+m[2]/1000);
+  const m=cuts(),co=cwOff(),px0=x(S.freq-co+m[0]/1000),px1=x(S.freq-co+m[1]/1000);
   cx.fillStyle='rgba(255,255,255,.10)';cx.fillRect(px0,top,Math.max(1,px1-px0),H-top);
   // spectrum line
   if(wfLine&&wfLineMeta&&wfRows.length){
@@ -815,6 +865,10 @@ seg('steps',STEPS.map(s=>[s,String(s)]),S.step,v=>setStep(+v));
 seg('modes',Object.keys(MODES).map(k=>[k,MODES[k][0]]),S.mode,setMode);
 seg('bands',BANDS.map((b,i)=>[i,b[0]]),-1,v=>gotoBand(+v));
 seg('zooms',ZOOMS,S.zoom,v=>setZoom(+v));
+$('pblo').addEventListener('input',e=>pbSet(0,+e.target.value));
+$('pbhi').addEventListener('input',e=>pbSet(1,+e.target.value));
+$('pblink').addEventListener('click',()=>{S.pblink=!S.pblink;store.set('pblink',S.pblink);pbShow()});
+$('pbreset').addEventListener('click',()=>{S.pb[S.mode]=PB0[S.mode].slice();store.set('pb',S.pb);pbShow();dirty=true;if(conn==='on')tuneNow()});
 $('vol').value=S.vol;$('vol').addEventListener('input',e=>{S.vol=+e.target.value;S.mute=false;store.set('vol',S.vol);setVol()});
 $('pre').value=String(S.pre);$('pre').addEventListener('change',e=>{S.pre=+e.target.value;store.set('pre',S.pre)});
 $('power').addEventListener('click',()=>setPower(!power));
@@ -860,7 +914,7 @@ addEventListener('keydown',e=>{
 /* ---------- start ---------- */
 setInterval(()=>{const d=new Date(),p=x=>String(x).padStart(2,'0');$('utc').textContent=p(d.getUTCHours())+':'+p(d.getUTCMinutes())+':'+p(d.getUTCSeconds())+' UTC'},1000);
 $('dmode').textContent=MODES[S.mode][0];document.querySelector('.rx').classList.toggle('cwon',S.mode==='cw');
-showFreq();drawMems();drawRecs();drawMeter();resize();requestAnimationFrame(draw);
+showFreq();pbShow();drawMems();drawRecs();drawMeter();resize();requestAnimationFrame(draw);
 </script>
 </body>
 </html>
