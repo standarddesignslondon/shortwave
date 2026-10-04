@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#e9e7e2">
+<title>SW 1 · receivers</title>
+<style>
+:root{
+  --body:#e9e7e2; --panel:#f3f2ee; --ink:#141414; --mid:#77746e; --faint:#b9b6af; --line:#cfccc5;
+  --dark:#0e0e0e; --lit:#f1f0ec; --dim:#8a8882; --rec:#d8431f;
+  --sans:"Helvetica Neue",Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{background:var(--body);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.4;
+  -webkit-font-smoothing:antialiased;padding:24px 16px 48px}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer;-webkit-tap-highlight-color:transparent}
+a{color:inherit;-webkit-tap-highlight-color:transparent}
+.rx{max-width:720px;margin:0 auto;background:var(--panel);border:1px solid var(--line);border-radius:6px;
+  box-shadow:0 1px 0 #fff inset,0 18px 40px -28px rgba(0,0,0,.45)}
+.lab{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--mid)}
+.head{display:flex;align-items:center;gap:16px;padding:16px 22px}
+.brand{font-size:15px;font-weight:500;letter-spacing:.02em;white-space:nowrap}
+.brand span{color:var(--mid);font-weight:400;margin-left:10px}
+.head a{margin-left:auto;font-size:12px;letter-spacing:.04em;text-decoration:none;border:1px solid var(--faint);padding:7px 12px}
+.head a:hover{background:#e8e5df}
+
+/* display: optional frequency to open at */
+.disp{background:var(--dark);color:var(--lit);margin:0 22px;border-radius:3px;padding:16px 22px 18px}
+.disp .lab{color:var(--dim)}
+.frow{display:flex;align-items:baseline;gap:10px;margin-top:6px}
+#f{background:transparent;border:0;border-bottom:1px solid #3a3a3a;color:var(--lit);font-size:52px;font-weight:300;letter-spacing:-.02em;
+  line-height:1.1;width:100%;min-width:0;padding:0 0 4px;outline:0;border-radius:0;font-variant-numeric:tabular-nums;-moz-appearance:textfield}
+#f::placeholder{color:#4a4946}
+#f:focus{border-color:var(--lit)}
+#f::-webkit-outer-spin-button,#f::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.frow small{font-size:15px;letter-spacing:.08em;color:var(--dim);flex:none}
+.hint{color:var(--dim);margin-top:10px;font-size:12.5px}
+.seg{display:flex;flex-wrap:wrap;margin-top:14px}
+.seg button{background:transparent;border:1px solid #4a4946;color:var(--dim);margin:0 -1px -1px 0;padding:8px 12px;min-width:46px;font-size:12px;letter-spacing:.04em}
+.seg button[aria-pressed=true]{background:var(--lit);border-color:var(--lit);color:var(--dark);position:relative;z-index:1}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.chips button{background:none;border:1px solid #4a4946;color:var(--lit);padding:7px 10px;font-size:12px;font-variant-numeric:tabular-nums}
+.chips button:hover{border-color:var(--lit)}
+
+/* list */
+.sec{margin:22px 22px 0}
+.sec h2{font-size:10px;font-weight:400;letter-spacing:.14em;text-transform:uppercase;color:var(--mid);padding-bottom:8px;border-bottom:1px solid var(--ink)}
+.list{list-style:none}
+.list a{display:flex;align-items:center;gap:12px;padding:13px 2px;border-bottom:1px solid var(--line);text-decoration:none;min-height:48px}
+.list a:hover{background:#ece9e3}
+.list .nm{flex:1;min-width:0}
+.list .nm b{font-weight:500}
+.list .hs{display:block;color:var(--mid);font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.list .last{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--rec);flex:none}
+.list .go{color:var(--mid);flex:none;font-size:16px}
+.note{color:var(--mid);padding:22px 22px 24px;font-size:12.5px;line-height:1.55}
+.note b{color:var(--ink);font-weight:500}
+.ico{display:inline-block;vertical-align:-3px;width:16px;height:16px}
+:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.disp :focus-visible{outline-color:var(--lit)}
+
+@media (max-width:700px){
+  body{padding:0 0 32px}
+  .rx{border-radius:0;border-left:0;border-right:0}
+  .head{padding:14px 16px}
+  .disp{margin:0;border-radius:0;padding:16px 16px 18px}
+  #f{font-size:44px}
+  .sec{margin:22px 16px 0}.note{padding:22px 16px 24px}
+}
+</style>
+</head>
+<body>
+<main class="rx">
+  <div class="head">
+    <div class="brand">SW 1<span>receivers</span></div>
+    <a href="radio.html">SW 1 receiver</a>
+  </div>
+
+  <div class="disp">
+    <span class="lab">open tuned to · optional</span>
+    <div class="frow"><input id="f" type="number" inputmode="decimal" min="0" max="30000" step="any" placeholder="0 000" aria-label="Frequency in kHz"><small>kHz</small></div>
+    <div class="seg" id="modes"></div>
+    <div class="chips" id="mems"></div>
+    <div class="hint" id="hint"></div>
+  </div>
+
+  <div id="lists"></div>
+
+  <div class="note">
+    Each link opens that receiver's own page.
+    <b>To record there:</b> the record button is the circular-arrow icon
+    <svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M13 8a5 5 0 1 1-1.6-3.7" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M13.4 1.6v3.6H9.8" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>.
+    Press it to start and again to stop; stopping saves a WAV file.
+    Receivers come and go, so if one does not answer, try another.
+  </div>
+</main>
+
+<script>
+'use strict';
+// Same receiver list as the SW 1 receiver page (public KiwiSDRs), grouped by region.
+const GROUPS=[
+ ['Europe',[
+  ['UK · Wessex, SW England','wessex.zapto.org',8073],
+  ['Ireland · North West','irelandnorthwest.proxy.kiwisdr.com',8073],
+  ['France · F5LFE','www.f5lfe.fr',8073],
+  ['Netherlands · De Kiel (PA8AD)','pa8ad-1.proxy.kiwisdr.com',8073],
+  ['Germany · Filderstadt (DL2SBA)','dl2sba.ddns.net',8073],
+  ['Sweden · Siknas (SK2HG)','kiwisdr.sk2hg.se',8073],
+  ['Finland · Muurame (OH6HPS)','oh6hps.ddns.net',8073],
+  ['Norway · Trondheim (LA3WAA)','178.164.123.136',8073],
+  ['Iceland · Kopavogur (TF3GZ)','kop.utvarp.com',8073],
+  ['Spain · Navarra (EC2AQW)','21959.proxy.kiwisdr.com',8073],
+  ['Portugal · Lisbon (CS5SEL)','kiwi-hf.hamradio.isel.ipl.pt',8073],
+  ['Italy · IZ6198SWL','iz6198swl.proxy.kiwisdr.com',8073],
+  ['Czechia · Velvary (OL1F)','21684.proxy.kiwisdr.com',8073],
+  ['Hungary · HA2NA','194.36.182.122',8073],
+  ['Romania · Bucharest (YO3BN)','kiwisdr.yo3bn.ro',8073],
+  ['Greece · Nea Makri (SV1QJG)','kwhighpower.ddns.net',8073],
+  ['Cyprus · TWR Monitor','cyp.twrmon.net',8073]]],
+ ['Africa and Atlantic',[
+  ['Canary Islands · Fuerteventura','il38.ddns.net',8079],
+  ['South Africa · Centurion','kiwisdr.r7d.xyz',8073]]],
+ ['Americas',[
+  ['USA · Teaticket MA (KB1VWC)','kb1vwc.ddns.net',8073],
+  ['USA · Lubbock TX','data3.caprockweather.com',8073],
+  ['USA · KPH Inverness CA','kphsdr.com',8073],
+  ['USA · Anchorage AK (WL7NO)','wl7no.ddns.net',8073],
+  ['Hawaii · Kakaako','22329.proxy.kiwisdr.com',8073],
+  ['Canada · Prairies, Alberta','canadian-prairies-shortwave.ddns.net',8073],
+  ['Brazil · Pardinho','pardinho.websdr.com.br',8073],
+  ['Uruguay · Montevideo (CX8BIT)','cx8bit.proxy.kiwisdr.com',8073],
+  ['Chile · Santiago (CE3PBR)','ce3pbr.proxy.kiwisdr.com',8073]]],
+ ['Asia and Pacific',[
+  ['Japan · Machida (JK1LOT)','jk1lot.ham-radio-op.net',8073],
+  ['Japan · Okegawa (JP1ODJ)','jp1odj.proxy.kiwisdr.com',8073],
+  ['Thailand · Cha-Am (LA6LU)','la6lukiwisdrth.ddns.net',8073],
+  ['Thailand · So Phisai (VE3HLS)','ve3hls.proxy.kiwisdr.com',8073],
+  ['Philippines · Negros (DX6RAN)','dx6ran.ddns.net',8073],
+  ['Indonesia · Sidoarjo (YB3TE)','yb3te.kenkom.net',8073],
+  ['Indonesia · Bogor (Opal)','opalindo.proxy.kiwisdr.com',8073],
+  ['Australia · Augusta (VK6QS)','vk6qs2.proxy.kiwisdr.com',8073],
+  ['New Zealand · ZL2J','zl2j.proxy.kiwisdr.com',8073]]]
+];
+// [label, KiwiSDR mode name]
+const MODES=[['AM','am'],['AM-N','amn'],['SAM','sam'],['LSB','lsb'],['USB','usb'],['CW','cw'],['FM','nbfm']];
+const MEM0=[{label:'6000 kHz AM',freq:6000,mode:'am'},{label:'CNR1',freq:6112,mode:'am'},
+ {label:'World Christian Radio',freq:7275,mode:'am'},{label:'Guizhou PBS',freq:7275,mode:'am'},
+ {label:'7275 kHz AM',freq:7275,mode:'am'},{label:'659 kHz AM',freq:659,mode:'am'}];
+
+const $=id=>document.getElementById(id);
+const store={
+  get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},
+  set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+};
+// Memories saved in the SW 1 receiver page on this device are shared with this page.
+let mems=store.get('sw1.mem',MEM0);if(!Array.isArray(mems))mems=MEM0;
+let mode=store.get('sw1r.mode','am'),last=store.get('sw1r.last','');
+if(!MODES.some(m=>m[1]===mode))mode='am';
+
+function freq(){const v=parseFloat($('f').value);return isFinite(v)&&v>0&&v<=32000?Math.round(v*100)/100:null}
+// KiwiSDR page URL: http://host:port/?f=<kHz><mode>
+function url(host,port){const f=freq();return 'http://'+host+':'+port+'/'+(f?'?f='+f+mode:'')}
+function refresh(){
+  for(const a of document.querySelectorAll('.list a'))a.href=url(a.dataset.h,a.dataset.p);
+  const f=freq(),m=MODES.find(x=>x[1]===mode)[0];
+  $('hint').textContent=f?'Receivers will open on '+f+' kHz '+m+'.':'Leave empty to open each receiver where it starts by default.';
+  for(const b of $('modes').children)b.setAttribute('aria-pressed',b.dataset.v===mode);
+}
+// build
+for(const [val,v] of MODES.map(m=>[m[0],m[1]])){const b=document.createElement('button');b.textContent=val;b.dataset.v=v;
+  b.addEventListener('click',()=>{mode=v;store.set('sw1r.mode',v);refresh()});$('modes').appendChild(b)}
+for(const m of mems){if(!m||!isFinite(m.freq))continue;const b=document.createElement('button');b.textContent=m.label||(m.freq+' kHz');
+  b.addEventListener('click',()=>{$('f').value=m.freq;if(MODES.some(x=>x[1]===m.mode))mode=m.mode;store.set('sw1r.mode',mode);refresh()});$('mems').appendChild(b)}
+for(const [title,rows] of GROUPS){
+  const sec=document.createElement('section');sec.className='sec';
+  const h=document.createElement('h2');h.textContent=title;sec.appendChild(h);
+  const ul=document.createElement('ul');ul.className='list';
+  for(const [name,host,port] of rows){
+    const li=document.createElement('li'),a=document.createElement('a'),i=name.indexOf(' · ');
+    a.dataset.h=host;a.dataset.p=port;a.target='_blank';a.rel='noopener';
+    const nm=document.createElement('span');nm.className='nm';
+    const b=document.createElement('b');b.textContent=i<0?name:name.slice(0,i);nm.appendChild(b);
+    if(i>=0)nm.appendChild(document.createTextNode(name.slice(i)));
+    const hs=document.createElement('span');hs.className='hs';hs.textContent=host+(port!==8073?':'+port:'');nm.appendChild(hs);
+    a.appendChild(nm);
+    if(host===last){const l=document.createElement('span');l.className='last';l.textContent='last used';a.appendChild(l)}
+    const go=document.createElement('span');go.className='go';go.textContent='→';go.setAttribute('aria-hidden','true');a.appendChild(go);
+    a.addEventListener('click',()=>store.set('sw1r.last',host));
+    li.appendChild(a);ul.appendChild(li);
+  }
+  sec.appendChild(ul);$('lists').appendChild(sec);
+}
+$('f').addEventListener('input',refresh);
+refresh();
+</script>
+</body>
+</html>
