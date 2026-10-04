@@ -562,6 +562,7 @@ function setFreq(f,opt){
   if(f===S.freq&&!opt)return;
   S.freq=f;store.set('freq',f);showFreq();dirty=true;
   fHist.push([performance.now(),f]);if(fHist.length>64)fHist.shift();
+  if(S.mode==='cw')cwRetune();
   if(conn==='on'&&!tuneT)tuneT=setTimeout(()=>{tuneT=0;tuneNow()},20);
 }
 function stepBy(dir,size,grid){
@@ -666,8 +667,10 @@ const MORSE={'.-':'A','-...':'B','-.-.':'C','-..':'D','.':'E','..-.':'F','--.':'
  '.-..-.':'"','.--.-.':'@','...-.-':'<SK>','-.--.':'<KN>','.-...':'<AS>'};
 const CWF=[300,350,400,450,500,550,600,650,700],CWN=128,CWHOP=48;
 const cw={ring:new Float32Array(CWN),w:0,c:0,avg:new Float32Array(CWF.length),best:4,noise:0,hi:0,key:false,pend:0,
-  t:0,tCh:0,sym:'',dot:60,marks:[],words:0,hold:'',text:'',sig:false,lastUi:0};
-function cwReset(){cw.avg.fill(0);cw.noise=0;cw.hi=0;cw.key=false;cw.pend=0;cw.sym='';cw.marks.length=0;cw.words=0;cw.hold='';cw.sig=false;cw.tCh=cw.t;cwUi(true)}
+  t:0,tCh:0,sym:'',dot:60,marks:[],words:0,hold:'',text:'',sig:false,lastUi:0,warm:75};
+function cwReset(){cw.avg.fill(0);cw.marks.length=0;cw.dot=60;cwRetune()}
+// after a retune the levels are meaningless for a moment: re-learn the noise for 0.3 s before keying again
+function cwRetune(){cw.warm=75;cw.noise=0;cw.hi=0;cw.key=false;cw.pend=0;cw.sym='';cw.words=0;cw.hold='';cw.sig=false;$('cwkey').className='';cwUi(true)}
 function cwOut(ch){cw.text=(cw.text+ch).slice(-2000);const el=$('cwtext');el.textContent=cw.text;el.scrollTop=el.scrollHeight}
 // A lone E or T between word gaps is almost always a noise click, so a single-element character that starts a word
 // is held back until a second character follows it.
@@ -709,10 +712,11 @@ function cwFeed(pcm){
     let b=cw.best;for(let k=0;k<mag.length;k++){cw.avg[k]+=(mag[k]*mag[k]-cw.avg[k])*0.004;if(cw.avg[k]>cw.avg[b]*1.5)b=k}
     cw.best=b;
     const off=mag.filter((v,k)=>Math.abs(k-b)>=2).sort((x,y)=>x-y),med=off[off.length>>1];
+    if(cw.warm>0){cw.warm--;cw.noise=cw.noise?cw.noise+(med-cw.noise)*0.1:med;cw.tCh=cw.t;continue}
     cw.noise+=(med-cw.noise)*0.02;
     const e=mag[b];
     cw.hi=e>cw.hi?cw.hi+(e-cw.hi)*0.3:cw.hi*0.9985;
-    const on=cw.key?e>Math.max(cw.noise*3,cw.hi*0.3):e>Math.max(cw.noise*4.5,cw.hi*0.5);
+    const on=cw.key?e>Math.max(cw.noise*3.3,cw.hi*0.3):e>Math.max(cw.noise*5.5,cw.hi*0.5);
     // debounce: a change must hold for two hops (8 ms)
     if(on!==cw.key){if(++cw.pend>=2){
         const tEdge=cw.t-hopMs,dur=tEdge-cw.tCh;cw.tCh=tEdge;cw.key=on;cw.pend=0;
