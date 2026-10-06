@@ -123,6 +123,22 @@ input[type=range]::-moz-range-thumb{width:18px;height:18px;border:0;border-radiu
 .txt:focus{border-color:var(--ink)}
 .btn{border:1px solid var(--faint);background:transparent;padding:7px 12px;font-size:12px;letter-spacing:.04em}
 .btn:hover{background:#e8e5df}
+.btn[aria-pressed=true]{background:var(--ink);border-color:var(--ink);color:#fff}
+/* on now */
+.who{grid-column:1/-1;color:var(--dim);min-height:1.4em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:14px}
+.who b{color:var(--lit);font-weight:400}
+.onl{list-style:none;max-height:336px;overflow-y:auto;border-top:1px solid var(--ink);border-bottom:1px solid var(--line);overscroll-behavior:contain}
+.onl button{display:grid;grid-template-columns:4.6em 1fr auto;gap:16px;width:100%;text-align:left;background:none;border:0;
+  border-bottom:1px solid var(--line);padding:9px 8px;align-items:baseline;font-variant-numeric:tabular-nums}
+.onl li:last-child button{border-bottom:0}
+.onl button:hover{background:#ece9e3}
+.onl b{font-weight:500;text-align:right}
+.onl .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.onl small{color:var(--mid);margin-left:10px;font-size:12px}
+.onl .tm{color:var(--mid);font-size:12px}
+.onl button[aria-current=true]{background:var(--ink);color:#fff}
+.onl button[aria-current=true] small,.onl button[aria-current=true] .tm{color:#b9b6af}
+.src{color:var(--mid);font-size:11.5px;padding:8px 0 10px}
 .list{list-style:none}
 .list li{display:flex;align-items:center;gap:12px;padding:8px 0;border-top:1px solid var(--line);font-variant-numeric:tabular-nums}
 .list li .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -147,6 +163,8 @@ kbd{font:inherit;border:1px solid var(--faint);border-radius:3px;padding:0 5px;c
   .head{padding:14px 16px}.brand span{display:none}
   .disp{margin:0;border-radius:0;padding:16px;grid-template-columns:1fr}
   .side{text-align:left;display:flex;gap:14px;flex-wrap:wrap}
+  .onl button{grid-template-columns:4.2em 1fr;gap:12px}.onl .tm{display:none}
+  .onl .nm{white-space:normal}.onl small{display:block;margin-left:0}
   .freq{font-size:13.5vw}
   #dial{width:100%;margin:0;border-radius:0;height:180px}
   .cw{margin:0;border-radius:0;padding:12px 16px 14px}
@@ -175,6 +193,7 @@ kbd{font:inherit;border:1px solid var(--faint);border-radius:3px;padding:0 5px;c
       <div id="dband">&nbsp;</div>
       <div id="utc">00:00:00 UTC</div>
     </div>
+    <div class="who" id="who">&nbsp;</div>
     <div class="meter">
       <div class="mtrack" id="mtrack"><div class="mfill" id="mfill"></div></div>
       <div class="mread" id="mread">&nbsp;</div>
@@ -222,6 +241,18 @@ kbd{font:inherit;border:1px solid var(--faint);border-radius:3px;padding:0 5px;c
 
   <div class="sec">
     <div class="sech">
+      <span class="lab">on now</span><span class="lab" id="oncount"></span>
+      <input class="txt grow" id="onq" placeholder="Search station, language or country" aria-label="Search the stations on now">
+      <div class="seg" id="onband"></div>
+      <button class="btn" id="onutil" aria-pressed="false" title="Also list time signals, Morse, weather fax and other non-broadcast stations">Utility</button>
+    </div>
+    <ul class="onl" id="onlist"></ul>
+    <div class="empty" id="onempty" style="display:none"></div>
+    <div class="src" id="onsrc"></div>
+  </div>
+
+  <div class="sec">
+    <div class="sech">
       <span class="lab">memory</span>
       <input class="txt grow" id="memname" placeholder="Name (optional)" maxlength="40" aria-label="Memory name">
       <button class="btn" id="memadd">Store current</button>
@@ -244,6 +275,7 @@ kbd{font:inherit;border:1px solid var(--faint);border-radius:3px;padding:0 5px;c
     <span><kbd>↑</kbd> <kbd>↓</kbd> step</span>
     <span><kbd>0–9</kbd> <kbd>enter</kbd> go to kHz</span>
     <span><kbd>[</kbd> <kbd>]</kbd> band</span>
+    <span><kbd>N</kbd> <kbd>B</kbd> next / previous station on now</span>
     <span><kbd>M</kbd> mode</span>
     <span><kbd>R</kbd> record</span>
     <span><kbd>space</kbd> mute</span>
@@ -251,6 +283,7 @@ kbd{font:inherit;border:1px solid var(--faint);border-radius:3px;padding:0 5px;c
   </div>
 </main>
 
+<script src="eibi.js"></script>
 <script>
 'use strict';
 /* ---------- data ---------- */
@@ -636,6 +669,7 @@ function showFreq(){
   $('dband').textContent=b<0?'\u00a0':(b<2?BANDS[b][0]:BANDS[b][0]+' m band');
   pressed('bands',b<0?'':String(b));
   if(b>=0){bandLast[b]=S.freq;store.set('bandLast',bandLast)}
+  onTuned();
 }
 function gotoBand(i){i=(i+BANDS.length)%BANDS.length;const b=BANDS[i];const f=bandLast[i];
   setFreq(f>=b[1]&&f<=b[2]?f:b[1]);if(i<2&&S.step!==9&&S.step!==10)setStep(9)}
@@ -677,6 +711,8 @@ function draw(){
     cx.moveTo(xx,top);cx.lineTo(xx,top-(isMaj?9:4));
     if(isMaj&&f>=0)cx.fillText(maj<1?f.toFixed(1):String(Math.round(f)),xx,11)}
   cx.moveTo(0,top+0.5);cx.lineTo(W,top+0.5);cx.stroke();
+  // stations on now: a small mark under the scale
+  cx.fillStyle='#a3a19b';for(const f of onTicks){if(f<f0)continue;if(f>f0+span)break;cx.fillRect(Math.round(x(f)),top+1,1,5)}
   // needle
   const nx=Math.round(W/2)+0.5;cx.strokeStyle='#fff';cx.lineWidth=1;cx.beginPath();cx.moveTo(nx,top-12);cx.lineTo(nx,H);cx.stroke();
   cx.fillStyle='#fff';cx.beginPath();cx.moveTo(nx-5,top-13);cx.lineTo(nx+5,top-13);cx.lineTo(nx,top-6);cx.fill();
@@ -856,6 +892,147 @@ function memAdd(){
   S.mem.push({label,freq:S.freq,mode:S.mode});store.set('mem',S.mem);$('memname').value='';drawMems();
 }
 
+/* ---------- on now: the EiBi broadcast schedule (eibi.js, built by tools/build_eibi.py) ----------
+   row = [kHz, start HHMM, stop HHMM, days, home country, station, language, target, persistence, start DDMM, stop DDMM] */
+const EI=window.EIBI&&Array.isArray(window.EIBI.rows)?window.EIBI:null;
+const DAYN={Mo:1,Tu:2,We:3,Th:4,Fr:5,Sa:6,Su:7},MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const dayCache={};
+function daySpec(s){
+  if(dayCache[s])return dayCache[s];
+  let r,m;
+  if(s===''||s==='USB'||s==='LSB')r={k:'all'};
+  else if(/^(irr|tent|tests?)$/i.test(s))r={k:'all',irr:1};
+  else if(/^\d+$/.test(s))r={k:'set',set:[...s].map(Number)};
+  else if((m=/^(\d)\.(Mo|Tu|We|Th|Fr|Sa|Su)$/.exec(s)))r={k:'nth',n:+m[1],d:DAYN[m[2]]};
+  else if((m=/^Last(\d)$/.exec(s)))r={k:'last',d:+m[1]};
+  else if((m=/^(\d{1,2})(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)$/.exec(s)))r={k:'date',day:+m[1],mon:MON.indexOf(m[2])};
+  else{
+    const set=[];let ok=true;
+    for(const part of s.split(',')){
+      if((m=/^(Mo|Tu|We|Th|Fr|Sa|Su)-(Mo|Tu|We|Th|Fr|Sa|Su)$/.exec(part))){let d=DAYN[m[1]];for(;;){set.push(d);if(d===DAYN[m[2]])break;d=d%7+1}}
+      else if(/^(Mo|Tu|We|Th|Fr|Sa|Su)+$/.test(part))for(let i=0;i<part.length;i+=2)set.push(DAYN[part.substr(i,2)]);
+      else ok=false;
+    }
+    r=ok&&set.length?{k:'set',set}:{k:'no'};  // alt, harm, spur, Ram … are not regular broadcasts
+  }
+  return dayCache[s]=r;
+}
+function dayOK(sp,dt){
+  const dow=(dt.getUTCDay()+6)%7+1,dom=dt.getUTCDate();
+  switch(sp.k){
+    case 'all':return true;
+    case 'set':return sp.set.includes(dow);
+    case 'nth':return dow===sp.d&&Math.ceil(dom/7)===sp.n;
+    case 'last':return dow===sp.d&&dom+7>new Date(Date.UTC(dt.getUTCFullYear(),dt.getUTCMonth()+1,0)).getUTCDate();
+    case 'date':return dom===sp.day&&dt.getUTCMonth()===sp.mon;
+  }
+  return false;
+}
+const ddmm=s=>+s.slice(2)*100+ +s.slice(0,2);
+// every schedule row that is on the air at the given moment
+function eibiNow(now){
+  if(!EI)return [];
+  const hm=now.getUTCHours()*100+now.getUTCMinutes(),yest=new Date(now.getTime()-864e5),off=EI.season[0]==='A'?4:5,out=[];
+  for(const r of EI.rows){
+    const t0=r[1],t1=r[2];let dt=now;
+    if(t0<t1){if(hm<t0||hm>=t1)continue}
+    else if(t0>t1){if(hm<t0){if(hm>=t1)continue;dt=yest}}   // runs past midnight: the day is the one it started on
+    const p=r[8]%10;if(p===off)continue;                     // winter-only entry in a summer schedule, or the reverse
+    const sd=r[9],ed=r[10],cur=(dt.getUTCMonth()+1)*100+dt.getUTCDate();
+    if(sd&&ed){const a=ddmm(sd),b=ddmm(ed);if(a<=b?(cur<a||cur>b):(cur<a&&cur>b))continue}
+    else if(p===6){if(sd&&cur<ddmm(sd))continue;if(ed&&cur>ddmm(ed))continue}
+    if(!dayOK(daySpec(r[3]),dt))continue;
+    out.push(r);
+  }
+  return out;
+}
+const UTIL=['-CW','-EC','-HF','-TS','-TY'];
+const isUtil=r=>UTIL.includes(r[6])||(r[6]===''&&bandOf(r[0])<0);
+const TG={Af:'Africa',Am:'the Americas',As:'Asia',Car:'the Caribbean',Cau:'the Caucasus',CIS:'the former Soviet Union',CNA:'Central North America',
+  ENA:'Eastern North America',Eu:'Europe',FE:'the Far East',Glo:'worldwide',In:'the Indian subcontinent',LAm:'Latin America',ME:'the Middle East',
+  NAO:'the North Atlantic',Oc:'Oceania',SAO:'the South Atlantic',SEA:'South East Asia',SEE:'South East Europe',Sib:'Siberia',Tib:'Tibet',
+  WIO:'the Western Indian Ocean',WNA:'Western North America'};
+const TGB={Af:'Africa',Am:'America',As:'Asia',Eu:'Europe',Oc:'Oceania',In:'India'},TGD={C:'Central',E:'East',N:'North',S:'South',W:'West'};
+function tgtName(c){
+  if(!c)return '';
+  if(TG[c])return TG[c];
+  const m=/^([CENSW])(Af|Am|As|Eu|Oc|In)$/.exec(c);
+  return m?TGD[m[1]]+' '+TGB[m[2]]:(EI.itu[c]||c);
+}
+const langName=c=>c?c.split(',').map(x=>EI.lang[x]||x).join(' / '):'';
+const hhmm=t=>String(t).padStart(4,'0');
+let onAll=[],onVis=[],onBtns=[],onTicks=[],onQuery='',onBand=store.get('onband','all'),onUtil=store.get('onutil',false),onLastBand=-2;
+function onFilter(){
+  const b=bandOf(S.freq),words=onQuery.toLowerCase().split(/\s+/).filter(Boolean);
+  return onAll.filter(r=>{
+    if(!onUtil&&isUtil(r))return false;
+    if(onBand==='band'&&(b>=0?(r[0]<BANDS[b][1]||r[0]>BANDS[b][2]):Math.abs(r[0]-S.freq)>250))return false;
+    if(words.length){
+      if(!r.hay)r.hay=(r[0]+' '+r[5]+' '+langName(r[6])+' '+(EI.itu[r[4]]||r[4])+' '+tgtName(r[7])+' '+r[6]+' '+r[7]).toLowerCase();
+      for(const w of words)if(!r.hay.includes(w))return false;
+    }
+    return true;
+  });
+}
+function onRender(){
+  const ul=$('onlist'),top=ul.scrollTop,frag=document.createDocumentFragment();
+  onVis=onFilter();onBtns=[];onLastBand=bandOf(S.freq);
+  for(const r of onVis){
+    const li=document.createElement('li'),b=document.createElement('button'),f=document.createElement('b'),nm=document.createElement('span'),
+      sm=document.createElement('small'),tm=document.createElement('span');
+    f.textContent=r[0];nm.className='nm';nm.textContent=r[5];
+    sm.textContent=[langName(r[6]),r[7]?'to '+tgtName(r[7]):'',daySpec(r[3]).irr?'irregular':''].filter(Boolean).join(' · ');nm.appendChild(sm);
+    tm.className='tm';tm.textContent=r[1]===0&&r[2]===2400?'24 h':hhmm(r[1])+'–'+hhmm(r[2]);
+    b.title=(EI.itu[r[4]]||r[4])+' · '+hhmm(r[1])+'–'+hhmm(r[2])+' UTC';
+    b.append(f,nm,tm);b.addEventListener('click',()=>onTune(r));li.appendChild(b);frag.appendChild(li);onBtns.push([r[0],b]);
+  }
+  ul.textContent='';ul.appendChild(frag);ul.scrollTop=top;
+  $('oncount').textContent=EI?String(onVis.length):'';
+  const e=$('onempty');e.style.display=onVis.length?'none':'block';ul.style.display=onVis.length?'':'none';
+  e.textContent=!EI?'The schedule file (eibi.js) is missing, so there is nothing to list.':'Nothing is listed for this filter at the moment.';
+  onMark(false);
+}
+// highlight the station under the needle and name it in the display
+function onMark(scroll){
+  let first=null;
+  for(const [f,b] of onBtns){const cur=Math.abs(f-S.freq)<0.5;if(cur&&!first)first=b;if((b.getAttribute('aria-current')==='true')!==cur)cur?b.setAttribute('aria-current','true'):b.removeAttribute('aria-current')}
+  if(first&&scroll){const ul=$('onlist'),t=first.offsetTop-ul.offsetTop;if(t<ul.scrollTop||t+first.offsetHeight>ul.scrollTop+ul.clientHeight)ul.scrollTop=t-ul.clientHeight/2+first.offsetHeight/2}
+  const hit=onAll.filter(r=>Math.abs(r[0]-S.freq)<0.5),w=$('who');
+  if(!hit.length){w.innerHTML='&nbsp;';return}
+  const r=hit.find(x=>!isUtil(x))||hit[0];
+  w.innerHTML='<b>'+esc(r[5])+'</b>'+esc([langName(r[6]),r[7]?'to '+tgtName(r[7]):''].filter(Boolean).map(x=>' · '+x).join(''))+(hit.length>1?' · +'+(hit.length-1)+' more':'');
+}
+function onTuned(){if(onBand==='band'&&bandOf(S.freq)!==onLastBand)onRender();else onMark(true)}
+function onTune(r){
+  const m=r[6]==='-CW'?'cw':r[6]==='-TY'||r[6]==='-HF'||r[3]==='USB'?'usb':r[3]==='LSB'?'lsb':isUtil(r)&&r[6]===''?'usb':['am','amn','sam'].includes(S.mode)?S.mode:'am';
+  if(m!==S.mode)setMode(m);
+  setFreq(r[0],true);
+}
+// jump to the next or previous listed station
+function onStep(dir){
+  if(!onVis.length)return;
+  let r;
+  if(dir>0)r=onVis.find(x=>x[0]>S.freq+0.4)||onVis[0];
+  else{for(const x of onVis){if(x[0]<S.freq-0.4)r=x;else break}r=r||onVis[onVis.length-1]}
+  onTune(r);
+}
+function onRefresh(force){
+  const now=new Date(),next=eibiNow(now);
+  const same=!force&&next.length===onAll.length&&next.every((r,i)=>r===onAll[i]);
+  if(!same){onAll=next;onTicks=[...new Set(onAll.filter(r=>!isUtil(r)).map(r=>r[0]))].sort((a,b)=>a-b);onRender();dirty=true}
+  if(EI){const fmt=d=>{const x=new Date(d+'T00:00:00Z');return x.getUTCDate()+' '+MON[x.getUTCMonth()]+' '+x.getUTCFullYear()};
+    const stale=now>new Date(EI.to+'T23:59:59Z'),early=now<new Date(EI.from+'T00:00:00Z');
+    $('onsrc').textContent='Schedule: EiBi '+EI.season+' (eibispace.de), updated '+fmt(EI.updated||EI.built)+'. Times are UTC. A listing means scheduled, not necessarily audible on this receiver.'+
+      (stale?' This season ended on '+fmt(EI.to)+', so the list is out of date.':early?' This season starts on '+fmt(EI.from)+'.':'')}
+}
+(function(){
+  seg('onband',[['all','All bands'],['band','This band']],onBand,v=>{onBand=v;store.set('onband',v);pressed('onband',v);onRender()});
+  $('onutil').setAttribute('aria-pressed',!!onUtil);
+  $('onutil').addEventListener('click',()=>{onUtil=!onUtil;store.set('onutil',onUtil);$('onutil').setAttribute('aria-pressed',onUtil);onRender()});
+  let qt=0;$('onq').addEventListener('input',e=>{onQuery=e.target.value;clearTimeout(qt);qt=setTimeout(onRender,120)});
+  setInterval(()=>onRefresh(false),20000);
+})();
+
 /* ---------- controls ---------- */
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function seg(id,items,cur,fn){const box=$(id);items.forEach(([val,label])=>{const b=document.createElement('button');b.textContent=label;b.dataset.v=val;
@@ -905,6 +1082,8 @@ addEventListener('keydown',e=>{
     case 'm':case 'M':{const ks=Object.keys(MODES);setMode(ks[(ks.indexOf(S.mode)+1)%ks.length]);break}
     case 'r':case 'R':rec.on?recStop():recStart();break;
     case 'p':case 'P':setPower(!power);break;
+    case 'n':case 'N':onStep(1);break;
+    case 'b':case 'B':onStep(-1);break;
     case ' ':S.mute=!S.mute;setVol();setStatus(conn==='on'?(S.mute?'<b>Muted</b> · '+esc(rxTarget()[2]):''):$('status').innerHTML);if(conn==='on'&&!S.mute)showOn();break;
     default:return;
   }
@@ -914,7 +1093,7 @@ addEventListener('keydown',e=>{
 /* ---------- start ---------- */
 setInterval(()=>{const d=new Date(),p=x=>String(x).padStart(2,'0');$('utc').textContent=p(d.getUTCHours())+':'+p(d.getUTCMinutes())+':'+p(d.getUTCSeconds())+' UTC'},1000);
 $('dmode').textContent=MODES[S.mode][0];document.querySelector('.rx').classList.toggle('cwon',S.mode==='cw');
-showFreq();pbShow();drawMems();drawRecs();drawMeter();resize();requestAnimationFrame(draw);
+onRefresh(true);showFreq();pbShow();drawMems();drawRecs();drawMeter();resize();requestAnimationFrame(draw);
 </script>
 </body>
 </html>
